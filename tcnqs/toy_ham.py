@@ -13,7 +13,7 @@ def init_hamiltonian(n, degen_n=0, delta=1.0, m_off=0.1, nnz_ratio=0.1):
     """
     H = np.zeros((n, n))
     for i in range(n):
-        if i > degen_n:
+        if i >= degen_n:
             H[i, i] = delta * i
         for j in range(i):
             if np.random.rand() < nnz_ratio:
