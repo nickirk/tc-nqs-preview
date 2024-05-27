@@ -19,8 +19,16 @@ Add your plots in the `study.ipynb` file.
 
 ## 13.05.2024
 
-- [ ] Read about configuration interaction theory
-- [ ] Learn the basics about JAX: https://jax.readthedocs.io/en/latest/tutorials.html
-- [ ] configure your laptop and upload any notes that have been updated.
+- [x] Read about configuration interaction theory
+- [x] Learn the basics about JAX: https://jax.readthedocs.io/en/latest/tutorials.html
+    and Flax: https://flax.readthedocs.io/en/latest/quick_start.html 
+- [x] configure your laptop and upload any notes that have been updated.
+
+## 27.05.2024
+- [ ] Figure out in PySCF the indexing of slater determinants.
+    - add test for this
+- [ ] Train the simple MLP network with the FCI wavefunction.
+    - add test
+- [ ] Implement the backflow (finish backflow.py)
 
   
