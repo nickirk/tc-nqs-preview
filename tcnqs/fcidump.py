@@ -1,0 +1,59 @@
+import numpy as np
+
+
+def read(fcidump_file):
+    # read fcidump
+    with open(fcidump_file, 'r') as f:
+        lines = [x.lower().strip() for x in f.readlines()]
+        lbrk = [il for il, l in enumerate(lines) if "&end" in l or "/" in l][0]
+        k = 'orbsym'
+        #orb_sym = [[int(x) for x in (l.split(k)[1].split('=')[1].split(','))] for l in lines if k in l][0]
+
+
+    with open(fcidump_file, 'r') as f:
+        lines = [x.lower().strip() for x in f.readlines()]
+        lbrk = [il for il, l in enumerate(lines) if "&end" in l or "/" in l][0]
+        keys = {'norb': None, 'nelec': None, 'ms2': None}
+        for k in keys:
+            keys[k] = [int(l.split(k)[1].split('=')[1].split(',')[0]) for l in lines if k in l][0]
+        print(keys)
+        n_sites = keys['norb']
+        n_elec = keys['nelec']
+        spin = keys['ms2']
+        h1e = np.zeros((n_sites, n_sites))
+        g2e = np.zeros((n_sites, n_sites, n_sites, n_sites))
+        ecore = 0
+        for l in lines[lbrk + 1:]:
+            if len(l.split()) == 0:
+                continue
+            a, i, j, k, l = l.split()
+            i, j, k, l = [int(x) - 1 for x in [i, j, k, l]]
+            if i + j + k + l == -4:
+                ecore += float(a)
+            elif k + l == -2:
+                h1e[i, j] = float(a)
+                h1e[j, i] = float(a)
+            else:
+                g2e[i, k, l, j] = float(a)
+                g2e[k, i, j, l] = float(a)
+
+
+    print('h1e norm = ', np.linalg.norm(h1e))
+    print('g2e norm = ', np.linalg.norm(g2e))
+
+    return n_sites, n_elec, ecore, h1e, g2e
+
+def read_2_spin(fcidump_file):
+    n_sites, n_elec, ecore, h1e, g2e = read(fcidump_file)
+
+    h1e_s = np.kron(h1e, np.eye(2))
+    g2e_s = np.zeros(np.asarray(g2e.shape)*2)
+    for i in range(n_sites):
+        for j in range(n_sites):
+            for k in range(n_sites):
+                for l in range(n_sites):
+                    g2e_s[2*i, 2*k, 2*l, 2*j] = g2e[i, k, l, j]
+                    g2e_s[2*i+1, 2*k+1, 2*l+1, 2*j+1] = g2e[i, k, l, j]
+                    g2e_s[2*i, 2*k+1, 2*l+1, 2*j] = g2e[i, k, l, j]
+                    g2e_s[2*i+1, 2*k, 2*l, 2*j+1] = g2e[i, k, l, j]
+    return n_sites, n_elec, ecore, h1e_s, g2e_s
