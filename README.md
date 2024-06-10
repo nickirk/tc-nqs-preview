@@ -32,12 +32,16 @@ Add your plots in the `study.ipynb` file.
 - [x] Implement the backflow (finish backflow.py)
 
 ## 03.06.2024
-- [ ] Finish debugging backflow
+- [x] Finish debugging backflow
     - produce the same test as in MLP, ensuring the number of parameters are the same in the two networks
     - plot the two trainning process and add them to the Nextcloud latex 
+
+## 10.06.2024
 - [ ] Start looking at how to implement Hamiltonian.
     - How to find the different indices between two strings of dets. 
     - Ke will add a FCIDUMP reader 
     - Slater-Condon rules: https://en.wikipedia.org/wiki/Slater–Condon_rules 
+    - Finish the functions in hamiltonian.py
+
 
   
