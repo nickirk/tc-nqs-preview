@@ -9,11 +9,9 @@ import matplotlib.pyplot as plt
 class NN1(nn.Module):
     @nn.compact
     def __call__(self, x):
-        x = nn.Dense(features=64)(x)  
+        x = nn.Dense(features=20)(x)  
         x = nn.relu(x)
         x = nn.Dense(features=1)(x) 
-        x = nn.tanh(x)    
-        print(x.shape)
         return x             
 
 

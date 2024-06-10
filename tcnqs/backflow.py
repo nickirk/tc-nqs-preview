@@ -7,6 +7,9 @@ from jax import random
 import matplotlib.pyplot as plt
 
 from jax.nn.initializers import normal
+
+def positive_random_init(key, shape, dtype=jnp.float32):
+    return random.uniform(key, shape, dtype, minval=0., maxval=0.1)
 class BACKFLOW(nn.Module):
 
     num_orbital:int
@@ -15,23 +18,17 @@ class BACKFLOW(nn.Module):
     @nn.compact
     def __call__(self, x):
         
-        #y = jnp.copy(x)
-        mask = jnp.where(x == 1, 1, 0)
-        selected_config = jnp.nonzero(mask, size=self.num_electron)[1]
+        selected_config = jnp.nonzero(x, size=self.num_electron)[1]
         
-        x = nn.Dense(features=4)(x)  
-        x = nn.tanh(x)
-        x = nn.Dense(features=4)(x)  
-
-        x = nn.tanh(x)
-        
+        x = nn.Dense(features=2, kernel_init=positive_random_init)(x)  
+        x = nn.relu(x)
         #Backflow
         x = nn.DenseGeneral(features=(self.num_orbital,self.num_electron))(x)
-        x = nn.tanh(x)
         
         x = x[:,selected_config , :]
         #print(jnp.linalg.det(x))
-        return jnp.linalg.det(x)
+        x = jnp.linalg.det(x)
+        return x
     
 def row_select(y):
     selected_configs=[]
@@ -44,7 +41,8 @@ def row_select(y):
 def create_model(rng, input_shape,num_electrons): #input shape = #orbitals total
     model = BACKFLOW(num_orbital=input_shape,num_electron=num_electrons)
     initial=jnp.concatenate((jnp.ones((num_electrons,)),
-                                                 jnp.zeros((input_shape-num_electrons,))),axis=0)
+                            jnp.zeros((input_shape-num_electrons,))),
+                            axis=0)
     initial=jnp.reshape(initial,(1,input_shape))
     variables = model.init(rng,initial)#initializer=normal 
     return model, variables
@@ -69,5 +67,5 @@ def train_step(state, batch):
 
 
 def create_train_state(rng, model, variables):
-    tx = optax.adam(learning_rate=0.01)
+    tx = optax.adam(learning_rate=0.001)
     return train_state.TrainState.create(apply_fn=model.apply, params=variables['params'], tx=tx)
