@@ -7,7 +7,8 @@ def generate_ci_data(num_orbitals,num_alpha_electrons,num_beta_electrons,ci):
     y=[]
     for i in range(ci.shape[0]):
         for j in range(ci.shape[1]):
-                
+            if np.abs(ci[i,j]) < 1e-5:
+                continue
             y.append(ci[i,j])
             orba=cistring.addr2str(num_orbitals,num_alpha_electrons,i)
             orbb=cistring.addr2str(num_orbitals,num_beta_electrons,j)
