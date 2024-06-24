@@ -48,7 +48,7 @@ def mse_loss(params, apply_fn, x, y):
     return jnp.mean((preds - y) ** 2)
 
 
-#@jax.jit
+@jax.jit
 def train_step(state, batch):
     def loss_fn(params):
         x, y = batch

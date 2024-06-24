@@ -45,13 +45,13 @@ class BACKFLOW(nn.Module):
 
         x = self.dense_general(x)
         x = x[:,selected_config , :]
-        x = jnp.linalg.det(x)*jnp.sqrt(1/(self.num_electron))
+        x = jnp.linalg.det(x)#*jnp.sqrt(1/(self.num_electron))
         return x
     
 def positive_random_init(key, shape, dtype=jnp.float32):
-    return random.uniform(key, shape, dtype, minval=-1, maxval=0)
+    return random.uniform(key, shape, dtype, minval=0, maxval=0.2)
 
-def create_model(rng, input_shape, num_electrons, hidden_layer_sizes=[],    
+def create_model(rng, input_shape, num_electrons, hidden_layer_sizes=[4],    
                  activation='relu'): 
     model = BACKFLOW(num_orbital=input_shape, num_electron=num_electrons, 
                      hidden_layer_sizes=hidden_layer_sizes,
@@ -83,7 +83,27 @@ def train_step(state, batch):
     state = state.apply_gradients(grads=grads)
     return state, loss_fn(state.params)
 
+def log_loss(params,apply_fn,x,y):
+    # this will calculate the batch loss directly for all x,y
+    preds = apply_fn({'params': params}, x)
+    Norm_preds = jnp.sum(jnp.power(preds,2))
+    Norm_y= jnp.sum(jnp.power(y,2))
+    
+    overlap_coeff = jnp.dot(preds,y)**2# Define jax vector product of preds and y  
+    
+    return -jnp.log(overlap_coeff/(Norm_y*Norm_preds)) # return the log loss error
+
+#@jax.jit
+def train_step_log(state,batch):
+    def loss_fn(params):
+        x, y = batch
+        loss = log_loss(params, state.apply_fn, x, y)
+        return loss
+    # loss_fn = log_loss()
+    grads = jax.grad(loss_fn)(state.params)
+    state = state.apply_gradients(grads=grads)
+    return state, loss_fn(state.params)
 
 def create_train_state(rng, model, variables):
-    tx = optax.adam(learning_rate=0.005)
+    tx = optax.adam(learning_rate=0.001)
     return train_state.TrainState.create(apply_fn=model.apply, params=variables['params'], tx=tx)

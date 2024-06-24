@@ -25,12 +25,13 @@ def test_backflow_supervised():
     num_samples = len(y_train) 
     
     model, variables = bf.create_model(rng, input_size,
-                                       num_electrons=num_alpha_electrons+num_beta_electrons, hidden_layer_sizes=[4], activation='relu')
+                                       num_electrons=num_alpha_electrons+num_beta_electrons,
+                                       hidden_layer_sizes=[4,4], activation='tanh')
     state = bf.create_train_state(rng, model, variables)
     #print(variables)
     # Training loop
     num_epochs = 10000
-    batch_size = 196
+    batch_size = len(x_train)
     train_losses = []
 
 
@@ -44,13 +45,14 @@ def test_backflow_supervised():
 
         for i in range(0, num_samples, batch_size):
             batch = (x_train[i:i+batch_size], y_train[i:i+batch_size])
-            state, loss = bf.train_step(state, batch)
+            state, loss = bf.train_step_log(state, batch)
             epoch_loss += loss
         
         average_epoch_loss = epoch_loss / (num_samples // batch_size)
         train_losses.append(average_epoch_loss)
         rng = subrng
         print(f"Epoch {epoch+1}, Loss: {average_epoch_loss}")
+    
     
     with open('params.pkl', 'wb') as f:
         pickle.dump(state.params, f)

@@ -57,3 +57,21 @@ def read_2_spin(fcidump_file):
                     g2e_s[2*i, 2*k+1, 2*l+1, 2*j] = g2e[i, k, l, j]
                     g2e_s[2*i+1, 2*k, 2*l, 2*j+1] = g2e[i, k, l, j]
     return n_sites, n_elec, ecore, h1e_s, g2e_s
+
+def read_2_spin_orbital_seprated(fcidump_file):
+    n_sites, n_elec, ecore, h1e, g2e = read(fcidump_file)
+    # Check Logic again: We have 2 spin seprated orbitals collated together
+    # h1e_s = np.kron(h1e, np.eye(2))
+    h1e_s = np.kron(np.eye(2),h1e)
+    g2e_s = np.zeros(np.asarray(g2e.shape)*2)
+    for i in range(n_sites):
+        for j in range(n_sites):
+            for k in range(n_sites):
+                for l in range(n_sites):
+                    # New function for my string order of orbitals 
+                    # \alpha =(1,1,0,0) \beta=(1,1,0,0) --> \alpha \beta = (1,1,0,0,1,1,0,0)
+                    g2e_s[i, k, l, j] = g2e[i, k, l, j]
+                    g2e_s[i+n_sites, k+n_sites, l+n_sites, j+n_sites] = g2e[i, k, l, j]
+                    g2e_s[i, k+n_sites, l+n_sites, j] = g2e[i, k, l, j]
+                    g2e_s[i+n_sites, k, l, j+n_sites] = g2e[i, k, l, j]
+    return n_sites, n_elec, ecore, h1e_s, g2e_s
