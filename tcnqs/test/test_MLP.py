@@ -5,6 +5,7 @@ from pyscf import fci
 import numpy as np
 from pyscf.fci import cistring
 import matplotlib.pyplot as plt
+import pickle
 
 from tcnqs import mlp
 from tcnqs.utils import generate_ci_data
@@ -33,8 +34,11 @@ def test_mlp_supervised():
                                         hidden_layer_sizes=[4], activation='relu')
     state = mlp.create_train_state(rng, model, variables)
     
+    with open('params_mlp.pkl', 'rb') as f:
+        parameters = pickle.load(f)
+    parameters = {'params': parameters}
     # Training loop
-    num_epochs = 10000
+    num_epochs = 3000
     batch_size = 1
     train_losses = []
 
@@ -54,6 +58,8 @@ def test_mlp_supervised():
         rng = subrng
         print(f"Epoch {epoch+1}, Loss: {average_epoch_loss}")
     
+    #with open('params_mlp.pkl', 'wb') as f:
+    #    pickle.dump(state.params, f)
     assert train_losses[-1] < 1e-3
     print("Success")
     
