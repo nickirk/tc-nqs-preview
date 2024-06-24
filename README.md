@@ -44,4 +44,11 @@ Add your plots in the `study.ipynb` file.
     - Finish the functions in hamiltonian.py
 
 
-  
+## 24.06.2024
+- [ ] **Debug 4 electron system H4**
+    - Write simple test inputting two SD directly and compute the known value.
+- [ ] Fix the warning "assigning array to scalar".
+- [ ] Think about how to improve the performance of Hamiltonian part.
+    - **jit it, removing the if statements. **
+    - *binary rep of SD, see if np array takes more memory?* 
+        
