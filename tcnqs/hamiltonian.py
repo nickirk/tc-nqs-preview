@@ -31,7 +31,8 @@ class HAMILTONIAN:
         
         if jnp.sum(diff)%2 == 0:
             sum = 0
-            for i in range(self.n_orb):
+            sum_indices=jnp.where(det1==1)[0]
+            for i in sum_indices:
         
                 # n_orb is already multiplied by 2 
                 # make sure while implememting the code 
@@ -59,7 +60,9 @@ class HAMILTONIAN:
             k, j = jnp.where(det1[diff_index]==1)[0],jnp.where(det2[diff_index]==1)[0]
             
             sum = 0
-            for i in range(self.n_orb):
+            common_occupancy=jnp.logical_and(det1,det2).astype(int)
+            sum_indices=jnp.where(common_occupancy==1)[0]
+            for i in sum_indices:
                 
                 # n_orb is already multiplied by 2 
                 # make sure while implememting the code 
@@ -70,8 +73,9 @@ class HAMILTONIAN:
         
         if jnp.sum(diff)%2 == 0:
             sum = 0
-            for i in range(self.n_orb):
-                for j in range(self.n_orb):
+            sum_indices=jnp.where(det1==1)[0]
+            for i in sum_indices:
+                for j in sum_indices:
                         # n_orb is already multiplied by 2 
                         # make sure while implememting the code 
 
