@@ -20,16 +20,16 @@ class HAMILTONIAN:
         # compare the two binary arrays() and find out the index where they differ
         
         diff = jnp.bitwise_xor(det1, det2)
-        if jnp.sum(diff)%2 > 1:
+        if jnp.sum(diff) > 2:
             return 0.0
         
-        if jnp.sum(diff)%2 == 1:
+        if jnp.sum(diff) == 2:
             diff_index = jnp.nonzero(diff)[0]
             i, j = jnp.where(det1[diff_index]==1)[0],jnp.where(det2[diff_index]==1)[0]
             
             return self.h1g[i,j]
         
-        if jnp.sum(diff)%2 == 0:
+        if jnp.sum(diff) == 0:
             sum = 0
             sum_indices=jnp.where(det1==1)[0]
             for i in sum_indices:
@@ -45,15 +45,16 @@ class HAMILTONIAN:
         # bitwise_xor operator to find the difference between the two determinants
         
         diff = jnp.bitwise_xor(det1, det2)
-        if jnp.sum(diff)%2 > 2:
+        if jnp.sum(diff) > 4:
             return 0.0
-        if jnp.sum(diff)%2 == 2:
+        if jnp.sum(diff) == 4:
             diff_index = jnp.nonzero(diff)[0]
-            i, k, j, l = jnp.where(det1[diff_index]==1)[0],jnp.where(det2[diff_index]==1)[0]
+            i, k = jnp.where(det1[diff_index]==1)[0]
+            j, l= jnp.where(det2[diff_index]==1)[0]
             
             # Check once again- Getting confused with the indices
-            return self.g2e[i, k, j, l] - self.g2e[i, k, l, j]
-        if jnp.sum(diff)%2 == 1:
+            return self.g2e[i, k, l, j] - self.g2e[i, k, j, l]
+        if jnp.sum(diff) == 2:
             i,j= jnp.nonzero(diff)[0]
             
             diff_index = jnp.nonzero(diff)[0]
@@ -67,11 +68,11 @@ class HAMILTONIAN:
                 # n_orb is already multiplied by 2 
                 # make sure while implememting the code 
                 
-                sum += self.g2e[k,i, j, i] - self.g2e[k,i, i, j]
+                sum += self.g2e[k,i, i, j] - self.g2e[k,i, j, i]
             
             return sum
         
-        if jnp.sum(diff)%2 == 0:
+        if jnp.sum(diff) == 0:
             sum = 0
             sum_indices=jnp.where(det1==1)[0]
             for i in sum_indices:
@@ -79,7 +80,7 @@ class HAMILTONIAN:
                         # n_orb is already multiplied by 2 
                         # make sure while implememting the code 
 
-                        sum += self.g2e[i,j,i,j] - self.g2e[i,j,j,i]
+                        sum += self.g2e[i,j,j,i] - self.g2e[i,j,i,j]
                         
             return sum/2
             

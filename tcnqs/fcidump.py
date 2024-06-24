@@ -1,7 +1,7 @@
 import numpy as np
 
 
-def read(fcidump_file):
+def read(fcidump_file, is_tc=False):
     # read fcidump
     with open(fcidump_file, 'r') as f:
         lines = [x.lower().strip() for x in f.readlines()]
@@ -28,14 +28,26 @@ def read(fcidump_file):
                 continue
             a, i, j, k, l = l.split()
             i, j, k, l = [int(x) - 1 for x in [i, j, k, l]]
+           
             if i + j + k + l == -4:
                 ecore += float(a)
-            elif k + l == -2:
+            
+            elif k + l ==  -2:
                 h1e[i, j] = float(a)
                 h1e[j, i] = float(a)
             else:
-                g2e[i, k, l, j] = float(a)
-                g2e[k, i, j, l] = float(a)
+                if not is_tc:
+                    g2e[i, k, l, j] = float(a)
+                    g2e[j, k, l, i] = float(a)
+                    g2e[j, l, k, i] = float(a)
+                    g2e[i, l, k, j] = float(a)
+                    g2e[k, i, j, l] = float(a)
+                    g2e[k, j, i, l] = float(a)
+                    g2e[l, j, i, k] = float(a)
+                    g2e[l, i, j, k] = float(a)
+                else:
+                    g2e[i, k, l, j] = float(a)
+                    g2e[k, i, j, l] = float(a)
 
 
     print('h1e norm = ', np.linalg.norm(h1e))

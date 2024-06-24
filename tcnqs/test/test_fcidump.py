@@ -11,7 +11,8 @@ def generate_fcidump():
     mol = pyscf.M(
     atom = 'H 0 0 0; H 0 0 1.0',  
     basis = 'sto3g',
-    spin = 0
+    spin = 0,
+    symmetry = False
     )
 
     # Perform Hartree-Fock calculation
