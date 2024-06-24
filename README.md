@@ -37,7 +37,7 @@ Add your plots in the `study.ipynb` file.
     - plot the two trainning process and add them to the Nextcloud latex 
 
 ## 10.06.2024
-- [ ] Start looking at how to implement Hamiltonian.
+- [x] Start looking at how to implement Hamiltonian.
     - How to find the different indices between two strings of dets. 
     - Ke will add a FCIDUMP reader 
     - Slater-Condon rules: https://en.wikipedia.org/wiki/Slater–Condon_rules 
