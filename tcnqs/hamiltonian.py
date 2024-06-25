@@ -1,5 +1,5 @@
-from itertools import combinations
 import jax.numpy as jnp
+import numpy as np
 
 # Potential Issue: if we want to use jit avoid if-else statements below 
 
@@ -13,7 +13,11 @@ class HAMILTONIAN:
         self.g2e = g2e
     
     def __call__(self, det1, det2):
-        return self._get_1body(det1, det2) + self._get_2body(det1, det2)
+        a=self._get_1body(det1, det2) + self._get_2body(det1, det2)
+        # print(type(a))
+        # if type(a) == np.ndarray :
+        #     b=1
+        return a
     
     
     def _get_1body(self, det1, det2):
@@ -25,12 +29,13 @@ class HAMILTONIAN:
         
         if jnp.sum(diff) == 2:
             diff_index = jnp.nonzero(diff)[0]
-            i, j = jnp.where(det1[diff_index]==1)[0],jnp.where(det2[diff_index]==1)[0]
+            i = diff_index[jnp.where(det1[diff_index]==1)][0]
+            j = diff_index[jnp.where(det2[diff_index]==1)][0]
             
             return self.h1g[i,j]
         
         if jnp.sum(diff) == 0:
-            sum = 0
+            sum = 0.0
             sum_indices=jnp.where(det1==1)[0]
             for i in sum_indices:
         
@@ -49,19 +54,22 @@ class HAMILTONIAN:
             return 0.0
         if jnp.sum(diff) == 4:
             diff_index = jnp.nonzero(diff)[0]
-            i, k = jnp.where(det1[diff_index]==1)[0]
-            j, l= jnp.where(det2[diff_index]==1)[0]
+            i = diff_index[jnp.where(det1[diff_index]==1)][0]
+            k = diff_index[jnp.where(det1[diff_index]==1)][1]
+            j = diff_index[jnp.where(det2[diff_index]==1)][0]
+            l = diff_index[jnp.where(det2[diff_index]==1)][1]
             
-            # Check once again- Getting confused with the indices
             return self.g2e[i, k, l, j] - self.g2e[i, k, j, l]
         if jnp.sum(diff) == 2:
             i,j= jnp.nonzero(diff)[0]
             
             diff_index = jnp.nonzero(diff)[0]
-            k, j = jnp.where(det1[diff_index]==1)[0],jnp.where(det2[diff_index]==1)[0]
+            k = diff_index[jnp.where(det1[diff_index]==1)][0]
+            j = diff_index[jnp.where(det2[diff_index]==1)][0]
             
-            sum = 0
+            sum = 0.0
             common_occupancy=jnp.logical_and(det1,det2).astype(int)
+            
             sum_indices=jnp.where(common_occupancy==1)[0]
             for i in sum_indices:
                 
@@ -73,7 +81,7 @@ class HAMILTONIAN:
             return sum
         
         if jnp.sum(diff) == 0:
-            sum = 0
+            sum = 0.0
             sum_indices=jnp.where(det1==1)[0]
             for i in sum_indices:
                 for j in sum_indices:
