@@ -20,14 +20,16 @@ def read(fcidump_file, is_tc=False):
         n_sites = keys['norb']
         n_elec = keys['nelec']
         spin = keys['ms2']
-        h1e = np.zeros((n_sites, n_sites))
-        g2e = np.zeros((n_sites, n_sites, n_sites, n_sites))
+        h1e = np.zeros((n_sites, n_sites),dtype=float)
+        g2e = np.zeros((n_sites, n_sites, n_sites, n_sites),dtype=float)
         ecore = 0
         for l in lines[lbrk + 1:]:
             if len(l.split()) == 0:
                 continue
             a, i, j, k, l = l.split()
             i, j, k, l = [int(x) - 1 for x in [i, j, k, l]]
+            
+            #print(a)
            
             if i + j + k + l == -4:
                 ecore += float(a)
@@ -35,6 +37,7 @@ def read(fcidump_file, is_tc=False):
             elif k + l ==  -2:
                 h1e[i, j] = float(a)
                 h1e[j, i] = float(a)
+               # print(h1e[i,j],h1e[j,i])
             else:
                 if not is_tc:
                     g2e[i, k, l, j] = float(a)
@@ -59,7 +62,7 @@ def read_2_spin(fcidump_file):
     n_sites, n_elec, ecore, h1e, g2e = read(fcidump_file)
 
     h1e_s = np.kron(h1e, np.eye(2))
-    g2e_s = np.zeros(np.asarray(g2e.shape)*2)
+    g2e_s = np.zeros(np.asarray(g2e.shape)*2,dtype=float)
     for i in range(n_sites):
         for j in range(n_sites):
             for k in range(n_sites):
