@@ -17,7 +17,7 @@ def test_hamiltonian():
     
     # Define the molecule
     mol = pyscf.M(
-    atom = 'H 0 0 0; H 0 0 1.0; H 0 0 2; H 0 0 3.0',  
+    atom = 'H 0 0 0; H 0 0 1.0; H 0 0 2.0; H 0 0 3.0',  
     basis = 'sto3g',
     spin = 0
     )
@@ -29,6 +29,7 @@ def test_hamiltonian():
     
     # # a=ham(ket,bra)
     # print("hf energy=",ham(hf,hf)+ecore)
+    
     myhf = mol.RHF().run()
     cisolver = pyscf.fci.FCI(myhf)
     
@@ -46,6 +47,7 @@ def test_hamiltonian():
     
     x_train, y_train = generate_ci_data(num_orbitals, num_alpha_electrons, num_beta_electrons, ci_vector)
     print("FCI Energy",cie)
+    x=ham(x_train[0],x_train[2])
     H= np.zeros((len(x_train), len(x_train)))
     for i in range(len(x_train)):
         for j in range(len(x_train)):
@@ -54,7 +56,7 @@ def test_hamiltonian():
     #H[0,3]=H[3,0]
     eig=np.sort(np.linalg.eig(H)[0])[0] +ecore
     print("check ref ", myhf.e_tot,H[0,0]+ecore)
-    print("check",eig,cie)
+    print("check FCI",eig,cie)
     
 if __name__ == '__main__':
     test_hamiltonian()
