@@ -50,5 +50,19 @@ Add your plots in the `study.ipynb` file.
 - [ ] Fix the warning "assigning array to scalar".
 - [ ] Think about how to improve the performance of Hamiltonian part.
     - **jit it, removing the if statements. **
-    - *binary rep of SD, see if np array takes more memory?* 
+    - *binary rep of SD, see if np array takes more memory?*
+     
+## Presentation
+- Introduction
+  - Backgroud:
+      - static (degeneracy) and dynamic correlation (cusp condition, very large basis set, complete basis set limit to compare with experiments),
+      - and the exponential size of FCI
+  - Motivations: Second quantized NN good at capturing the static correlation (related work), but 2nd formulation plagued by dynamic correlation -> TC 
+- Understanding why backflow is good.
+  - Introducing BF architechture. 
+  - Comparing to other networks, such as MLP, RBM, transformer, in terms of encoding anti-symmetry, and sampling
+- Supervised trainning
+    - [ ] Plot FCI wavefunction, y CI coefficients, x SD index.
+- A simple deterministic sampling (all the SD) to train and show the energy reduction
+- Conclusion
         
