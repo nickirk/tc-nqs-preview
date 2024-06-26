@@ -60,6 +60,7 @@ class HAMILTONIAN:
             l = diff_index[jnp.where(det2[diff_index]==1)][1]
             
             return self.g2e[i, k, l, j] - self.g2e[i, k, j, l]
+        
         if jnp.sum(diff) == 2:
             i,j= jnp.nonzero(diff)[0]
             
@@ -68,14 +69,11 @@ class HAMILTONIAN:
             j = diff_index[jnp.where(det2[diff_index]==1)][0]
             
             sum = 0.0
-            common_occupancy=jnp.logical_and(det1,det2).astype(int)
+            #common_occupancy=jnp.logical_and(det1,det2).astype(int)
             
-            sum_indices=jnp.where(common_occupancy==1)[0]
+            #sum_indices=jnp.where(common_occupancy==1)[0]
+            sum_indices = jnp.where(det1==1)[0]
             for i in sum_indices:
-                
-                # n_orb is already multiplied by 2 
-                # make sure while implememting the code 
-                
                 sum += self.g2e[k,i, i, j] - self.g2e[k,i, j, i]
             
             return sum
