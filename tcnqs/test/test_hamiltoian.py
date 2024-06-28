@@ -12,14 +12,13 @@ from pyscf.tools import fcidump
 
 def test_hamiltonian():
     
-    
-    
-    
     # Define the molecule
     mol = pyscf.M(
-    atom = 'H 0 0 0; H 0 0 1.0; H 0 0 2.0; H 0 0 3.0',  
+    atom = 'H 0 0 0; H 0 0 1.0 ; He 0 0 2.0 ',  
     basis = 'sto3g',
-    spin = 0
+    spin = 0,
+    charge = 0,
+    symmetry = False
     )
     
     # use assert to check the energies
@@ -52,7 +51,7 @@ def test_hamiltonian():
     for i in range(len(x_train)):
         for j in range(len(x_train)):
             H[i,j] = ham(x_train[i], x_train[j])
-    print("H=",H) 
+    print("H=",jnp.all(H.T==H)) 
     #H[0,3]=H[3,0]
     eig=np.sort(np.linalg.eig(H)[0])[0] +ecore
     print("check ref ", myhf.e_tot,H[0,0]+ecore)
