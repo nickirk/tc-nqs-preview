@@ -13,7 +13,7 @@ class HAMILTONIAN:
         self.g2e = g2e
     
     def __call__(self, det1, det2):
-        # a=self._get_1body(det1, det2) + self._get_2body(det1, det2)
+        
         return self._get_1body(det1, det2) + self._get_2body(det1, det2)
     
     # Potential Issue: Only for even number of electrons in the alpha and beta seprated orbitals both
@@ -58,7 +58,7 @@ class HAMILTONIAN:
         
         if jnp.sum(diff) == 4:
             diff_index = jnp.nonzero(diff,size=4)[0]
-            det1_indices = diff_index[jnp.where(det1[diff_index]==1 , size=2)]
+            det1_indices = diff_index[jnp.where(det1[diff_index]==1, size=2)]
             det2_indices = diff_index[jnp.where(det2[diff_index]==1, size=2)]
             i = det1_indices[0]
             k = det1_indices[1]
@@ -71,7 +71,7 @@ class HAMILTONIAN:
             return phase_global*(self.g2e[i, k, l, j] - self.g2e[i, k, j, l])
         
         if jnp.sum(diff) == 2:
-            i,j= jnp.nonzero(diff)[0]
+            # i,j= jnp.nonzero(diff)[0]
             
             diff_index = jnp.nonzero(diff)[0]
             k = diff_index[jnp.where(det1[diff_index]==1)][0]
