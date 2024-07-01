@@ -4,7 +4,8 @@ from pyscf import gto, scf, fci
 from pyscf.tools import fcidump
 from tcnqs import fcidump as fd
 
-
+# Purpose of this file is just to generate dump files and check if they are being read correctly
+    
 
 def generate_fcidump():
     # Define the molecule
@@ -33,7 +34,6 @@ def test_fcidump():
     n_sites, n_elec, ecore, h1e, g2e = fd.read(fcidump_file)
     # print(n_sites, n_elec, ecore, h1e, g2e)
     
-    # Purpose of this file is just to generate dump files and check if they are being read correctly
     
     
     
