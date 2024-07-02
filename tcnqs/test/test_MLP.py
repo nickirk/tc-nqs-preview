@@ -30,7 +30,7 @@ def test_mlp_supervised():
     input_size = 2*num_orbitals # Example input size
     num_samples = len(y_train) # Number of training samples
     
-    model, variables = mlp.create_model(rng, (input_size,), 
+    model, variables = mlp.create_model(rng, input_size, 
                                         hidden_layer_sizes=[4], activation='relu')
     state = mlp.create_train_state(rng, model, variables)
     

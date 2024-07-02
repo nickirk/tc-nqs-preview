@@ -30,12 +30,13 @@ class MLP(nn.Module):
             x = self.activation_fn(x)
         
         x = self.output_layer(x) 
+        x = x.reshape(-1) 
         return x             
 
 
 def create_model(rng, input_shape, hidden_layer_sizes=[4, 4], activation='relu'):
     model = MLP(hidden_layer_sizes=hidden_layer_sizes, activation=activation)
-    variables = model.init(rng, jnp.ones(input_shape))
+    variables = model.init(rng, jnp.ones((input_shape,)))
     return model, variables
 
 # Define the mean squared error (MSE) loss function
