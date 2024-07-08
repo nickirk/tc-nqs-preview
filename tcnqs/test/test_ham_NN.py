@@ -87,7 +87,7 @@ def train_step_loss(state,batch,H):
 
 
 
-rng = random.PRNGKey(27)
+rng = random.PRNGKey(17)
 
 
 input_size = 2*num_orbitals 
@@ -102,7 +102,7 @@ model_mlp, variables_mlp = mlp.create_model(rng, input_size ,hidden_layer_sizes=
 state_mlp = mlp.create_train_state(rng, model_mlp, variables_mlp)
 #print(variables)
 # Training loop
-num_epochs = 3000
+num_epochs = 1400
 batch_size = num_samples
 train_losses_bf = []
 train_losses_mlp = []
@@ -139,9 +139,39 @@ plt.plot(range(1, num_epochs + 1), train_losses_mlp, label="MLP")
 plt.plot(range(1, num_epochs + 1),FCI_e_pyscf*np.ones(num_epochs), color='r', label="true FCI energy" , linewidth=1)
 plt.legend(loc="upper right")
 plt.xlabel("Epoch")
-plt.ylabel("Energy of H2")
+plt.ylabel("Energy of H4")
 plt.ylim(1.05*FCI_e_pyscf,0.8*FCI_e_pyscf)
 plt.savefig('result.png')
 
-#plt.show()
+plt.show()
 
+
+plt.close()
+
+y_bf = state_bf.apply_fn({'params': state_bf.params}, x_train)
+
+y_bf= y_bf/np.linalg.norm(y_bf)
+
+
+y_mlp = state_mlp.apply_fn({'params': state_mlp.params}, x_train)
+
+y_mlp= y_mlp/np.linalg.norm(y_mlp)
+
+# Assuming y_mlp, y_bf, and y_train are numpy arrays
+indices = np.argsort(-np.abs(y_train))  # Get indices to sort y_train in decreasing order of absolute values
+y_mlp = y_mlp[indices]
+y_bf= y_bf[indices]
+y_train= y_train[indices]
+
+plt.plot(np.abs(y_mlp)[:40],label='MLP')
+plt.plot(np.abs(y_bf)[:40],label='BF')
+
+plt.plot(np.abs(y_train)[:40],label='FCI')
+
+plt.legend()
+plt.ylabel('Absolute value of CI coefficients')
+plt.xlabel('Index of CI coefficient')
+plt.savefig('civ.png')
+
+
+#print(y_mlp, y_bf, y_train)
