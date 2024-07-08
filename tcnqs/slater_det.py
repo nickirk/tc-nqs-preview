@@ -34,8 +34,27 @@ class SD:
             return jnp.array(sd)
         
         self.det = jnp.concatenate((create_sd_rep(length,det_alpha), create_sd_rep(length,det_beta)))
-    def unpacked_data(self,det):
+    
+    # Function that can create slater determinant that can be used in the form inside hamiltonian
+    def unpacked_data(self,det,n_orb):
         as_list = [bin(n)[2:] for n in det]
+        orbitalrep = jnp.array([np.array(list(n.zfill(32))).astype(int)[::-1] for n in as_list])
+        orbitalrep=orbitalrep.reshape(-1)
+        b=32
+        c=jnp.ceil(n_orb/(b*2)).astype(int)
+        n_s_orbital = int(n_orb/2)
+        #print(c)
+        orbitalrep = jnp.concatenate((orbitalrep[:n_s_orbital], orbitalrep[c*b:c*b+n_s_orbital]))
+        return orbitalrep.astype(jnp.uint8)
+    
+    def diff(self, sd1, sd2 , n_orb):
+        diff = detwise_xor(sd1, sd2)
+        return self.unpacked_data( diff , n_orb)
+    
+    def common(self, sd1, sd2 , n_orb):
+        common = detwise_and(sd1, sd2)
+        return self.unpacked_data( common , n_orb)
+     
         
 
 def find_nonzero_index(sd):

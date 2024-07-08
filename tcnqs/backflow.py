@@ -69,7 +69,7 @@ def mse_loss(params, apply_fn, x, y):
     #preds_value = jax.device_get(preds).item()
     #y_value = jax.device_get(y).item()
     #print(preds_value, y_value)
-    
+    preds = preds/ jnp.linalg.norm(preds)
     return jnp.mean((preds - y) ** 2)
 
 

@@ -45,7 +45,7 @@ def mse_loss(params, apply_fn, x, y):
     #preds_value = jax.device_get(preds).item()
     #y_value = jax.device_get(y).item()
     #print(preds_value, y_value)
-
+    preds = preds/ jnp.linalg.norm(preds)
     return jnp.mean((preds - y) ** 2)
 
 
@@ -61,7 +61,7 @@ def train_step(state, batch):
 
 
 def create_train_state(rng, model, variables):
-    tx = optax.adam(learning_rate=0.01)
+    tx = optax.adam(learning_rate=0.001)
     return train_state.TrainState.create(apply_fn=model.apply, params=variables['params'], tx=tx)
 
 

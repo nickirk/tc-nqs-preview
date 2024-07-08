@@ -31,7 +31,7 @@ def test_backflow_supervised():
     #print(variables)
     # Training loop
     num_epochs = 10000
-    batch_size = len(x_train)
+    batch_size = num_samples
     train_losses = []
 
 

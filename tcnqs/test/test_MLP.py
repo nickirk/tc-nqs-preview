@@ -39,7 +39,7 @@ def test_mlp_supervised():
     parameters = {'params': parameters}
     # Training loop
     num_epochs = 3000
-    batch_size = 1
+    batch_size = num_samples
     train_losses = []
 
     for epoch in range(num_epochs):
