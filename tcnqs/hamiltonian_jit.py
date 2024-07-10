@@ -12,7 +12,8 @@ class HAMILTONIAN:
         self.g2e = g2e
     
     def phase(self, det , j):
-        return 1 - 2 * (jnp.sum(det[:j]) % 2)
+        sliced_det = lax.dynamic_slice(det, (0,), (j,))
+        return 1 - 2 * (jnp.sum(sliced_det) % 2)
     
     def __call__(self, det1, det2):
         return self._get_1body(det1, det2) + self._get_2body(det1, det2)
@@ -33,9 +34,8 @@ class HAMILTONIAN:
             return self.phase(det1,i) * self.phase(det2,j)*self.h1g[i,j]
 
         return lax.cond(num_diff == 2, 
-                        diff_2(),
-                        lambda _: lax.cond(num_diff == 0, diff_0(), lambda _: 0.0, operand=None),
-                        operand=None)
+                        diff_2,
+                        lambda _: lax.cond(num_diff == 0, diff_0, lambda _: 0.0))
 
     
     def _get_2body(self, det1, det2):
@@ -70,9 +70,6 @@ class HAMILTONIAN:
             return phase_global*(self.g2e[i, k, l, j] - self.g2e[i, k, j, l])
 
         return lax.cond(num_diff == 4, 
-                        diff_4(),
-                        lambda _: lax.cond(num_diff == 2, diff_2(), 
-                                           lambda _: lax.cond(num_diff == 0, diff_0(), 
-                                                              lambda _: 0.0 , operand=None),
-                                           operand=None),
-                        operand=None)
+                        diff_4,
+                        lambda _: lax.cond(num_diff == 2, diff_2, 
+                                           lambda _: lax.cond(num_diff == 0, diff_0, lambda _: 0.0)))
