@@ -64,17 +64,17 @@ def create_model(rng, input_shape, num_electrons, hidden_layer_sizes=[4],
     return model, variables
 
 # Define the mean squared error (MSE) loss function
-def mse_loss(params, apply_fn, x, y):    
-    preds = apply_fn({'params': params}, x)
-    #preds_value = jax.device_get(preds).item()
-    #y_value = jax.device_get(y).item()
-    #print(preds_value, y_value)
-    # preds = preds/ jnp.linalg.norm(preds)
-    return jnp.mean((preds - y) ** 2)
-
 
 @jax.jit
 def train_step(state, batch):
+    def mse_loss(params, apply_fn, x, y):    
+        preds = apply_fn({'params': params}, x)
+        #preds_value = jax.device_get(preds).item()
+        #y_value = jax.device_get(y).item()
+        #print(preds_value, y_value)
+        # preds = preds/ jnp.linalg.norm(preds)
+        return jnp.mean((preds - y) ** 2)
+    
     def loss_fn(params):
         x, y = batch
         loss = mse_loss(params, state.apply_fn, x, y)
@@ -83,23 +83,43 @@ def train_step(state, batch):
     state = state.apply_gradients(grads=grads)
     return state, loss_fn(state.params)
 
-def log_loss(params,apply_fn,x,y):
-    # this will calculate the batch loss directly for all x,y
-    preds = apply_fn({'params': params}, x)
-    Norm_preds = jnp.sum(jnp.power(preds,2))
-    Norm_y= jnp.sum(jnp.power(y,2))
-    
-    overlap_coeff = jnp.dot(preds,y)**2# Define jax vector product of preds and y  
-    
-    return -jnp.log(overlap_coeff/(Norm_y*Norm_preds)) # return the log loss error
-
 #@jax.jit
 def train_step_log(state,batch):
+    
+    def log_loss(params,apply_fn,x,y):
+        # this will calculate the batch loss directly for all x,y
+        preds = apply_fn({'params': params}, x)
+        Norm_preds = jnp.sum(jnp.power(preds,2))
+        Norm_y= jnp.sum(jnp.power(y,2))
+        
+        overlap_coeff = jnp.dot(preds,y)**2# Define jax vector product of preds and y  
+        
+        return -jnp.log(overlap_coeff/(Norm_y*Norm_preds)) # return the log loss error
+    
     def loss_fn(params):
         x, y = batch
         loss = log_loss(params, state.apply_fn, x, y)
         return loss
     # loss_fn = log_loss()
+    grads = jax.grad(loss_fn)(state.params)
+    state = state.apply_gradients(grads=grads)
+    return state, loss_fn(state.params)
+
+@jax.jit
+def train_step_hamiltonian(state,batch,H):
+    def hamiltonian_loss(params,apply_fn,x,H):
+    
+        preds = apply_fn({'params': params}, x)
+        Norm_preds = jnp.sum(jnp.power(preds,2))
+        overlap_coeff = jnp.sum(jnp.conj(preds)[:, None] * preds[None, :] * H)
+        
+        return  overlap_coeff/Norm_preds 
+
+    def loss_fn(params):
+        x, y = batch
+        loss = hamiltonian_loss(params, state.apply_fn, x, H)
+        return loss
+
     grads = jax.grad(loss_fn)(state.params)
     state = state.apply_gradients(grads=grads)
     return state, loss_fn(state.params)

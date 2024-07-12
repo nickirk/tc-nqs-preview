@@ -13,6 +13,7 @@ class HAMILTONIAN:
         self.g2e = g2e
     
     # By convention det1 is the bra and det2 is the ket always
+    #@jit
     def __call__(self, det1, det2):
         return self._get_1body(det1, det2)  + self._get_2body(det1, det2)
     
