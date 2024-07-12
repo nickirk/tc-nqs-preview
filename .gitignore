@@ -167,3 +167,5 @@ cython_debug/
 # Datasets
 *.csv
 *.zip
+*.png
+*fcidump
