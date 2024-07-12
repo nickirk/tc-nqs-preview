@@ -1,18 +1,17 @@
 import jax.numpy as jnp
-from tcnqs.fcidump import read_2_spin_orbital_seprated as read2
-from tcnqs.hamiltonian import HAMILTONIAN
-import pyscf
-from tcnqs.utils import generate_ci_data
 import numpy as np
+import pyscf
 from pyscf.tools import fcidump
 
+from tcnqs.fcidump import read_2_spin_orbital_seprated as read2
+from tcnqs.hamiltonian import HAMILTONIAN
+from tcnqs.utils import generate_ci_data
 
 
 def test_hamiltonian():
-    
     # Define the molecule and Pyscf calculations
     mol = pyscf.M(
-    atom = 'H 0 0 0; H 0 0 1.0 ; H 0 0 2.0 ; H 0 0 3.0',  
+    atom = 'H 0 0 0; H 0 0 1.0 ;H 0 0 3; H 0 0 4.0   ',  
     basis = 'sto3g',
     spin = 0,
     charge = 0,
@@ -31,9 +30,11 @@ def test_hamiltonian():
     n_sites, n_elec, ecore, h1e_s, g2e_s = read2(fcidump_file)
     
     # Create FCI Hamiltonian
-    hamiltonian = HAMILTONIAN(n_elec, n_sites, h1e_s, g2e_s)
+    hamiltonian = HAMILTONIAN(n_elec, 2*n_sites, h1e_s, g2e_s)
     
     x_train, y_train = generate_ci_data(num_orbitals, num_alpha_electrons, num_beta_electrons, ci_vector)
+    
+    HHH = hamiltonian(x_train[0], x_train[2])
     
     H= np.zeros((len(x_train), len(x_train)))
     for i in range(len(x_train)):
@@ -42,16 +43,6 @@ def test_hamiltonian():
     
     
     FCI_e_diagonal=np.sort(np.linalg.eig(H)[0])[0] + ecore
-    
-    # print("H=",jnp.all(H.T==H)) 
-    # #projected e fci 
-    # hf_det = x_train[0]
-    # e_fci_proj = 0
-    # for det, ci in zip(x_train, y_train):
-    #     e_fci_proj += ci * ham(hf_det, det)/y_train[0]
-    # e_fci_proj += ecore
-    # print("check ref ", myhf.e_tot, H[0,0]+ecore)
-    # print("check FCI",e_fci_proj, eig, cie)
     
     e_hf=H[0,0]+ecore
     

@@ -1,5 +1,5 @@
 import numpy as np
-
+import jax.numpy as jnp
 
 def read(fcidump_file, is_tc=False):
     # read fcidump
