@@ -1,8 +1,10 @@
 import jax.numpy as jnp
 from jax import jit, lax
 import jax
-
+from functools import partial
 # Potential Issue: not compitable with different number of electrons in alpha and beta seprated orbitals
+## WARNING: Using @partial for self to be static_argnums:- Once the hamiltonian is created, it is fixed and does not change
+## refer Strategy 2 in https://jax.readthedocs.io/en/latest/faq.html 
 
 class HAMILTONIAN:
     # n_orb is the number of orbitals in the alpha and beta seprated orbitals
@@ -22,6 +24,7 @@ class HAMILTONIAN:
         sum_result = jnp.sum(jnp.where(jnp.arange(self.n_orb) < j, det, 0))
         return 1 - 2 * (sum_result % 2)
     
+    @partial(jit, static_argnums=(0))
     def _get_1body(self, det1, det2):
         diff = jnp.bitwise_xor(det1, det2)
         num_diff = jnp.sum(diff)
@@ -43,7 +46,7 @@ class HAMILTONIAN:
                         lambda : lax.cond(
                         num_diff == 0, diff_0, lambda : 0.0))
 
-    
+    @partial(jit, static_argnums=(0))
     def _get_2body(self, det1, det2):
         diff = jnp.bitwise_xor(det1, det2)
         num_diff = jnp.sum(diff)
@@ -51,7 +54,7 @@ class HAMILTONIAN:
         def diff_0():
             sum_indices = jnp.where(det1 == 1, size=self.n_elec)[0]
             i, j = jnp.meshgrid(sum_indices, sum_indices, indexing='ij')
-            sum_result = jnp.sum(self.g2e[i, j, j, i] - self.g2e[i, j, i, j])
+            sum_result = jnp.sum(self.g2e[i, j, j, i] - self.g2e[i, j, i, j])     
             return sum_result/2
 
         def diff_2():

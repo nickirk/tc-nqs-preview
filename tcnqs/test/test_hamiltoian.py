@@ -63,7 +63,7 @@ def test_hamiltonian_jit(mol, test=False):
     
     # Create FCI Hamiltonian
     hamiltonian = HAMILTONIAN_JIT(n_elec, 2*n_sites, h1e_s, g2e_s)
-    hamiltonian = jax.jit(hamiltonian)
+    #hamiltonian = jax.jit(hamiltonian)
     x_train, y_train = generate_ci_data(num_orbitals, num_alpha_electrons, num_beta_electrons, ci_vector)
     x_train = jnp.asarray(x_train)
     
@@ -92,5 +92,5 @@ if __name__ == '__main__':
     symmetry = False
     )
     
-    test_hamiltonian(mol, test=True)
+    # test_hamiltonian(mol, test=True)
     test_hamiltonian_jit(mol, test=True)
