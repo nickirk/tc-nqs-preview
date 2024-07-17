@@ -81,6 +81,24 @@ def test_hamiltonian_jit(mol, test=False):
         print("Success: FCI & HF energy matches ")
         
     return H, ecore
+
+def test_setup_hci(mol):
+    myhf = mol.RHF().run()
+    num_orbitals = myhf.mo_coeff.shape[1]
+    num_alpha_electrons, num_beta_electrons = mol.nelec
+    
+    # Read the FCIDUMP file
+    fcidump_file = 'fcidump'
+    # write the fcidump file
+    fcidump.from_scf(myhf, fcidump_file)
+    n_sites, n_elec, ecore, h1e_s, g2e_s = read2(fcidump_file)
+    h1e_s = jnp.asarray(h1e_s)
+    g2e_s = jnp.asarray(g2e_s)
+    
+    # Create FCI Hamiltonian
+    hamiltonian = HAMILTONIAN_JIT(n_elec, 2*n_sites, h1e_s, g2e_s)
+    hamiltonian.setup_hci()
+
    
 if __name__ == '__main__':
     
@@ -92,5 +110,6 @@ if __name__ == '__main__':
     symmetry = False
     )
     
-    # test_hamiltonian(mol, test=True)
-    test_hamiltonian_jit(mol, test=True)
+    #test_hamiltonian(mol, test=True)
+    #test_hamiltonian_jit(mol, test=True)
+    test_setup_hci(mol)

@@ -13,6 +13,7 @@ class HAMILTONIAN:
         self.n_orb = n_orb 
         self.h1g = h1g
         self.g2e = g2e
+        self.sorted_g2e, self.sorted_inds = self.setup_hci()
     
     # By convention det1 is the bra and det2 is the ket always
     #@jit
@@ -88,3 +89,27 @@ class HAMILTONIAN:
                         lambda : jax.lax.cond(num_diff == 2, diff_2, 
                                            lambda : jax.lax.cond(num_diff == 0, diff_0, lambda : 0.0)))
 
+    
+    def setup_hci(self) -> jnp.ndarray:
+        # Generate all the pairs of indices
+        pairs = jnp.array([(i, j) for i in range(self.n_orb) for j in range(self.n_orb)])
+
+        def sort_elements(carry, pair):
+            i, j = pair
+            # dynamically slice the 2-body integrals
+            # sort the elements by their absolute values in descending order
+            block = self.g2e[i, :, :, j].flatten()
+            sorted_inds = jnp.argsort(-jnp.abs(block))
+            elements = jnp.take(block, sorted_inds)
+            return carry, (elements, sorted_inds)
+
+        # Initialize carry (not used in this case)
+        carry = None
+
+        # Use jax.lax.scan to iterate over pairs and collect nonzero elements and indices
+        _, results = jax.lax.scan(sort_elements, carry, pairs)
+
+        sorted_elements, sorted_indices = results
+
+
+        return sorted_elements, sorted_indices
