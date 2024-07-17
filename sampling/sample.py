@@ -56,6 +56,7 @@ def double_excitations(determinant, particle_pos, hole_pos):
     # return jnp.asarray(connected_space_double, dtype=jnp.uint8)
     
     
-
-det= jnp.array([1,1,1,1,0,0,0], dtype=jnp.uint8)
-generate_connected_space(det, 7 ,4)
+if __name__ == '__main__':
+    det= jnp.array([1,1,0,0,1], dtype=jnp.uint8)
+    a = generate_connected_space(det, 5 ,3)
+    print(a.shape)
