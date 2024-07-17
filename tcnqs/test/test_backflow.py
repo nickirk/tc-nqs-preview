@@ -1,7 +1,6 @@
 import jax.numpy as jnp
 from jax import random
 import pyscf
-from pyscf import fci
 import pickle
 
 from tcnqs.utils import generate_ci_data

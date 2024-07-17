@@ -1,7 +1,6 @@
 import jax.numpy as jnp
 from jax import random
 import pyscf
-from pyscf import fci
 import pickle
 
 from tcnqs.utils import generate_ci_data
@@ -12,7 +11,7 @@ from tcnqs.test.test_hamiltoian import test_hamiltonian_jit as test_hamiltonian
 
 def test_mlp_supervised(mol,random_key):
     myhf = mol.RHF().run()
-    cisolver = fci.FCI(myhf)
+    cisolver = pyscf.fci.FCI(myhf)
     rng = random.PRNGKey(random_key)
     
     num_orbitals = myhf.mo_coeff.shape[1]
