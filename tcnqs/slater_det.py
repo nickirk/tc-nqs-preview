@@ -1,6 +1,7 @@
 import jax.numpy as jnp
 import numpy as np
 
+## Some code that we dont need for Now
 
 class SD:
     """
@@ -35,9 +36,11 @@ class SD:
         
         self.det = jnp.concatenate((create_sd_rep(length,det_alpha), create_sd_rep(length,det_beta)))
     
+    
+    ## Think , test and write : Can create some problems in the future
     # Function that can create slater determinant that can be used in the form inside hamiltonian
     def unpacked_data(self,det,n_orb):
-        as_list = [bin(n)[2:] for n in det]
+        as_list = [bin(n)[2:] for n in self.det]
         orbitalrep = jnp.array([np.array(list(n.zfill(32))).astype(int)[::-1] for n in as_list])
         orbitalrep=orbitalrep.reshape(-1)
         b=32
@@ -48,40 +51,47 @@ class SD:
         return orbitalrep.astype(jnp.uint8)
     
     def diff(self, sd1, sd2 , n_orb):
-        diff = detwise_xor(sd1, sd2)
+        diff = jnp.bitwise_xor(sd1, sd2)
         return self.unpacked_data( diff , n_orb)
     
     def common(self, sd1, sd2 , n_orb):
-        common = detwise_and(sd1, sd2)
+        common = jnp.bitwise_andwise_and(sd1, sd2)
         return self.unpacked_data( common , n_orb)
-     
-        
-
-def find_nonzero_index(sd):
+    
+    def alpha(self, sd, n_orb):
+        return self.unpacked_data(sd[:len(sd)//2] , int(n_orb/2))
+    
+    def beta(self, sd, n_orb):
+        return self.unpacked_data(sd[len(sd)//2:] , int(n_orb/2))
+# Size for @jax.jit
+def find_nonzero_index(sd, size):
     # return indices where SD or a similar object is 1
     unpacked=jnp.array(list(bin(n)[2:])[::-1] for n in sd).astype(jnp.int8)
-    
+    return jnp.nonzero(unpacked,size=size)[0]
+
+
+
     
 
-def detwise_xor(sd1, sd2):
-    """
-    Function to calculate the XOR of two slater determinants.
-    params:
-    sd1 & sd2 : Takes input as two slater determinants.
+# def detwise_xor(sd1, sd2):
+#     """
+#     Function to calculate the XOR of two slater determinants.
+#     params:
+#     sd1 & sd2 : Takes input as two slater determinants.
     
-    Returns:
-    sd: XOR of two slater determinants.
-    """
-    return jnp.bitwise_xor(sd1, sd2)
+#     Returns:
+#     sd: XOR of two slater determinants.
+#     """
+#     return jnp.bitwise_xor(sd1, sd2)
 
-def detwise_and(sd1, sd2):
-    """
-    Function to calculate the AND of two slater determinants.
-    params:
-    sd1 & sd2 : Takes input as two slater determinants.
+# def detwise_and(sd1, sd2):
+#     """
+#     Function to calculate the AND of two slater determinants.
+#     params:
+#     sd1 & sd2 : Takes input as two slater determinants.
     
-    Returns:
-    sd: AND of two slater determinants.
-    """
-    return jnp.bitwise_and(sd1, sd2)
+#     Returns:
+#     sd: AND of two slater determinants.
+#     """
+#     return jnp.bitwise_and(sd1, sd2)
 
