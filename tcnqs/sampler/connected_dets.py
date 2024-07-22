@@ -105,6 +105,6 @@ def excite_double(pair, particles_select, holes_select , determinant):
     return determinant.at[a_i].set(0).at[a_d_i].set(1)
     
 if __name__ == '__main__':
-    det= jnp.array([1,1,0,0,1,1,0,0], dtype=jnp.uint8)
-    a = generate_connected_space(det, 8 ,4)
-    print(a)
+    det= jnp.array([1,0,0,1,0,1,0,1,0,0], dtype=jnp.uint8)
+    a = generate_connected_space(det, 10 ,4)
+    print(a.shape)
