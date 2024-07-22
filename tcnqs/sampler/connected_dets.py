@@ -5,6 +5,7 @@ import jax
 
 
 # valid for equal number of electorns in both spin orbitals
+
 # def generate_connected_space(determinant, n_orb, n_elec):
 #     n_orb = int(n_orb/2)
 #     n_elec = int(n_elec/2)

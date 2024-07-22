@@ -106,7 +106,7 @@ def train_step_log(state,batch):
     state = state.apply_gradients(grads=grads)
     return state, loss_fn(state.params)
 
-#@jax.jit
+@jax.jit
 def train_step_hamiltonian(state,batch,H):
     def hamiltonian_loss(params,apply_fn,x,H):
     

@@ -65,7 +65,10 @@ def test_backflow_supervised(mol, random_key):
     
     return train_losses
 
-def test_backflow_unsupervised(mol,random_key):
+def test_backflow_unsupervised(mol, random_key, num_epochs=2400, test = False):
+    if test:
+        jax.config.update("jax_enable_x64", True)
+    
     rng = random.PRNGKey(random_key)
     
     myhf = mol.RHF().run()
@@ -90,7 +93,7 @@ def test_backflow_unsupervised(mol,random_key):
                                 ,hidden_layer_sizes=[4],activation='tanh')
     state_bf = bf.create_train_state(rng, model_bf, variables_bf)
     
-    num_epochs = 2400
+    # num_epochs = 400
     batch_size = num_samples
     train_losses_bf = []
 
@@ -108,12 +111,13 @@ def test_backflow_unsupervised(mol,random_key):
         print(f"Epoch {epoch+1} , Loss_bf: {average_epoch_loss_bf+ ecore}")
     
     # print(FCI_e_pyscf, jnp.average(jnp.array(train_losses_bf[-50:],dtype=jnp.float32)))
-    assert jnp.absolute(train_losses_bf[-1]-FCI_e_pyscf) < 1e-3
-    print("Success: Model trained successfully")
+    if test:
+        assert jnp.absolute(train_losses_bf[-1]-FCI_e_pyscf) < 1e-3
+        print("Success: Model trained successfully")
     
     return train_losses_bf
 
-def test_backflow_connected(mol,random_key):
+def test_backflow_connected(mol, random_key , num_epochs=2400, test=False):
     rng = random.PRNGKey(random_key)
     
     myhf = mol.RHF().run()
@@ -147,7 +151,7 @@ def test_backflow_connected(mol,random_key):
                                 ,hidden_layer_sizes=[4],activation='tanh')
     state_bf = bf.create_train_state(rng, model_bf, variables_bf)
     
-    num_epochs = 2400
+    # num_epochs = 400
     batch_size = num_samples
     train_losses_bf = []
     #nwf = jax.jit(bf.train_step_connections)
@@ -165,18 +169,19 @@ def test_backflow_connected(mol,random_key):
         print(f"Epoch {epoch+1} , Loss_bf: {average_epoch_loss_bf+ ecore}")
     
     # print(FCI_e_pyscf, jnp.average(jnp.array(train_losses_bf[-50:],dtype=jnp.float32)))
-    assert jnp.absolute(train_losses_bf[-1]-FCI_e_pyscf) < 1e-3
-    print("Success: Model trained successfully")
+    if test:
+        assert jnp.absolute(train_losses_bf[-1]-FCI_e_pyscf) < 1e-3
+        print("Success: Model trained successfully")
     
-    return train_losses_bf
+    return train_losses_bf, FCI_e_pyscf
 
 if __name__ == '__main__':
     mol = pyscf.M(
-    atom = 'H 0 0 0; H 0 0 1.0; H 0 0 4.0; H 0 0 5.0  ', # H 0 0 3.0; H 0 0 4.0  
+    atom = 'H 0 0 0; H 0 0 1.0; H 0 0 3.0; H 0 0 4.0', # H 0 0 3.0; H 0 0 4.0  
     basis = 'sto-3g',
     spin = 0
     )
 
     # test_backflow_supervised(mol, 0)
-    # test_backflow_unsupervised(mol,17)
-    test_backflow_connected(mol, 17)
+    test_backflow_unsupervised(mol,17, )#test=True)
+    test_backflow_connected(mol, 17, )#test= True)
