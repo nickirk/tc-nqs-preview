@@ -2,11 +2,14 @@ import jax.numpy as jnp
 from jax import random
 import pyscf
 import pickle
+from pyscf.tools import fcidump
+import jax
 
+from tcnqs.fcidump import read_2_spin_orbital_seprated as read2
 from tcnqs.utils import generate_ci_data
 import tcnqs.backflow as bf
 from tcnqs.test.test_hamiltoian import test_hamiltonian_jit as test_hamiltonian
-
+from tcnqs.hamiltonian_jit import HAMILTONIAN
 
 
 def test_backflow_supervised(mol, random_key):
@@ -110,12 +113,70 @@ def test_backflow_unsupervised(mol,random_key):
     
     return train_losses_bf
 
+def test_backflow_connected(mol,random_key):
+    rng = random.PRNGKey(random_key)
+    
+    myhf = mol.RHF().run()
+    cisolver = pyscf.fci.FCI(myhf)
+    num_orbitals = myhf.mo_coeff.shape[1]
+    num_alpha_electrons, num_beta_electrons = mol.nelec
+    FCI_e_pyscf, ci_vector=cisolver.kernel()
+    cisolver = pyscf.fci.FCI(myhf)
+    
+    num_alpha_electrons, num_beta_electrons = mol.nelec
+    
+    fcidump_file = 'tcnqs/test/dataset_fcidump/fcidump'
+    fcidump.from_scf(myhf, fcidump_file)
+    n_sites, n_elec, ecore, h1e_s, g2e_s = read2(fcidump_file)
+    h1e_s = jnp.asarray(h1e_s)
+    g2e_s = jnp.asarray(g2e_s)
+    
+    # Create FCI Hamiltonian
+    hamiltonian = HAMILTONIAN(n_elec, 2*n_sites, h1e_s, g2e_s)
+    
+    x_train, y_train = generate_ci_data(num_orbitals,num_alpha_electrons,num_beta_electrons,ci_vector)
+    
+    # hamiltonian , ecore = test_hamiltonian(mol)
+
+    
+    num_orbitals = 2*myhf.mo_coeff.shape[1]
+    num_samples = len(y_train) 
+
+    model_bf, variables_bf = bf.create_model(rng, input_shape = num_orbitals, 
+                                            num_electrons= num_alpha_electrons + num_beta_electrons
+                                ,hidden_layer_sizes=[4],activation='tanh')
+    state_bf = bf.create_train_state(rng, model_bf, variables_bf)
+    
+    num_epochs = 2400
+    batch_size = num_samples
+    train_losses_bf = []
+    #nwf = jax.jit(bf.train_step_connections)
+    for epoch in range(num_epochs):
+        epoch_loss_bf = 0.0
+        for i in range(0, num_samples, batch_size):
+            batch = (x_train[i:i+batch_size], y_train[i:i+batch_size])
+            
+            state_bf, loss_bf = bf.train_step_connections(state_bf, batch, hamiltonian)
+            epoch_loss_bf += loss_bf
+        
+        average_epoch_loss_bf = epoch_loss_bf / (num_samples // batch_size)
+        train_losses_bf.append(average_epoch_loss_bf + ecore)
+        
+        print(f"Epoch {epoch+1} , Loss_bf: {average_epoch_loss_bf+ ecore}")
+    
+    # print(FCI_e_pyscf, jnp.average(jnp.array(train_losses_bf[-50:],dtype=jnp.float32)))
+    assert jnp.absolute(train_losses_bf[-1]-FCI_e_pyscf) < 1e-3
+    print("Success: Model trained successfully")
+    
+    return train_losses_bf
+
 if __name__ == '__main__':
     mol = pyscf.M(
-    atom = 'H 0 0 0; H 0 0 1.0 ;H 0 0 2; H 0 0 3.0',  
+    atom = 'H 0 0 0; H 0 0 1.0; H 0 0 4.0; H 0 0 5.0  ', # H 0 0 3.0; H 0 0 4.0  
     basis = 'sto-3g',
     spin = 0
     )
 
     # test_backflow_supervised(mol, 0)
-    test_backflow_unsupervised(mol, 17)
+    # test_backflow_unsupervised(mol,17)
+    test_backflow_connected(mol, 17)

@@ -16,7 +16,7 @@ class HAMILTONIAN:
         self.sorted_g2e, self.sorted_inds = self.setup_hci()
     
     # By convention det1 is the bra and det2 is the ket always
-    #@jit
+    @partial(jit, static_argnums=(0))
     def __call__(self, det1, det2):
         return self._get_1body(det1, det2)  + self._get_2body(det1, det2)
     
@@ -25,7 +25,7 @@ class HAMILTONIAN:
         sum_result = jnp.sum(jnp.where(jnp.arange(self.n_orb) < j, det, 0))
         return 1 - 2 * (sum_result % 2)
     
-    @partial(jit, static_argnums=(0))
+    #@partial(jit, static_argnums=(0))
     def _get_1body(self, det1, det2):
         diff = jnp.bitwise_xor(det1, det2)
         num_diff = jnp.sum(diff)
@@ -47,7 +47,7 @@ class HAMILTONIAN:
                         lambda : lax.cond(
                         num_diff == 0, diff_0, lambda : 0.0))
 
-    @partial(jit, static_argnums=(0))
+    #@partial(jit, static_argnums=(0))
     def _get_2body(self, det1, det2):
         diff = jnp.bitwise_xor(det1, det2)
         num_diff = jnp.sum(diff)
@@ -92,6 +92,9 @@ class HAMILTONIAN:
     
     def setup_hci(self) -> jnp.ndarray:
         # Generate all the pairs of indices
+        # can use jnp.meshgrid
+        # pairs = jnp.meshgrid(jnp.arange(self.n_orb), jnp.arange(self.n_orb), indexing='ij')
+        # pairs = jnp.array(pairs).reshape(2,-1).T
         pairs = jnp.array([(i, j) for i in range(self.n_orb) for j in range(self.n_orb)])
 
         def sort_elements(carry, pair):
