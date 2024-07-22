@@ -6,9 +6,10 @@ import optax
 from jax import random
 from typing import List
 from dataclasses import field
-
+from functools import partial
 from jax.nn.initializers import normal
 
+from tcnqs.sampler.connected_dets import generate_connected_space
 
 class BACKFLOW(nn.Module):
 
@@ -105,19 +106,50 @@ def train_step_log(state,batch):
     state = state.apply_gradients(grads=grads)
     return state, loss_fn(state.params)
 
-@jax.jit
+#@jax.jit
 def train_step_hamiltonian(state,batch,H):
     def hamiltonian_loss(params,apply_fn,x,H):
     
         preds = apply_fn({'params': params}, x)
-        Norm_preds = jnp.sum(jnp.power(preds,2))
-        overlap_coeff = jnp.sum(jnp.conj(preds)[:, None] * preds[None, :] * H)
+        Norm_preds = jnp.linalg.norm(preds)**2
+        #print(Norm_preds)
+        overlap_coeff = jnp.dot(preds,jnp.dot(H,preds))
+        #jnp.sum((preds)[:, None] * preds[None, :] * H)
         
         return  overlap_coeff/Norm_preds 
 
     def loss_fn(params):
         x, y = batch
         loss = hamiltonian_loss(params, state.apply_fn, x, H)
+        return loss
+
+    grads = jax.grad(loss_fn)(state.params)
+    state = state.apply_gradients(grads=grads)
+    return state, loss_fn(state.params)
+
+@partial(jax.jit, static_argnums=(2))
+def train_step_connections(state, batch, Hamiltonain):
+    def hamiltonian_loss(params, apply_fn, x, Hamiltonain):
+        C_i = apply_fn({'params': params}, x)
+        Norm = jnp.linalg.norm(C_i)
+        
+        def find_Ci(det):
+            c=jnp.all(x==det,axis=1)
+            return jnp.asarray(C_i[jnp.where(c,size = 1)[0][0]])
+        
+        def overlap(slater_determinant, C_i):
+            connected_space = generate_connected_space(slater_determinant, Hamiltonain.n_orb, Hamiltonain.n_elec)
+            psi_H_xi = jax.vmap(Hamiltonain,in_axes=(None,0))(slater_determinant,connected_space)
+            xi_psi = jax.vmap(find_Ci,in_axes=0)(connected_space)
+            return C_i*jnp.dot(psi_H_xi,xi_psi)
+            
+        overlap_coeff = jnp.sum(jax.vmap(overlap, in_axes =(0,0))(x,C_i))
+        
+        return overlap_coeff/Norm**2
+    
+    def loss_fn(params):
+        x, y = batch
+        loss = hamiltonian_loss(params, state.apply_fn, x, Hamiltonain)
         return loss
 
     grads = jax.grad(loss_fn)(state.params)
