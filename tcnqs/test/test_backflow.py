@@ -139,7 +139,7 @@ def test_backflow_connected(mol, random_key , num_epochs=2400, test=False):
     hamiltonian = HAMILTONIAN(n_elec, 2*n_sites, h1e_s, g2e_s)
     
     x_train, y_train = generate_ci_data(num_orbitals,num_alpha_electrons,num_beta_electrons,ci_vector)
-    
+    x_train = jnp.asarray(x_train,dtype=jnp.uint8)
     # hamiltonian , ecore = test_hamiltonian(mol)
 
     
@@ -177,11 +177,11 @@ def test_backflow_connected(mol, random_key , num_epochs=2400, test=False):
 
 if __name__ == '__main__':
     mol = pyscf.M(
-    atom = 'H 0 0 0; H 0 0 1.0; H 0 0 3.0; H 0 0 4.0', # H 0 0 3.0; H 0 0 4.0  
+    atom = 'H 0 0 0; H 0 0 1.0; H 0 0 3.0; H 0 0 4.0 ' , # H 0 0 3.0; H 0 0 4.0  
     basis = 'sto-3g',
     spin = 0
     )
 
     # test_backflow_supervised(mol, 0)
-    test_backflow_unsupervised(mol,17, )#test=True)
+    #test_backflow_unsupervised(mol,17, )#test=True)
     test_backflow_connected(mol, 17, )#test= True)
