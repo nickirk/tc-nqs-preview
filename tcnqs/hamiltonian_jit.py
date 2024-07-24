@@ -18,6 +18,8 @@ class HAMILTONIAN:
     # By convention det1 is the bra and det2 is the ket always
     @partial(jit, static_argnums=(0))
     def __call__(self, det1, det2):
+        det1 = jnp.asarray(det1, dtype=jnp.int8)
+        det2 = jnp.asarray(det2, dtype=jnp.int8)
         return self._get_1body(det1, det2)  + self._get_2body(det1, det2)
     
     # Potential Issue: Only for even number of electrons in the alpha and beta seprated orbitals both
