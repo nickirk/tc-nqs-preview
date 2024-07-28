@@ -12,7 +12,7 @@ from functools import partial
 
 from tcnqs.sampler.connected_dets import generate_connected_space
 
-class BACKFLOW(nn.Module):
+class Backflow(nn.Module):
 
     num_orbital: int
     num_electron: int
@@ -55,7 +55,7 @@ def positive_random_init(key, shape, dtype=jnp.float32):
 
 def create_model(rng, input_shape, num_electrons, hidden_layer_sizes=[4],    
                  activation='relu'): 
-    model = BACKFLOW(num_orbital=input_shape, num_electron=num_electrons, 
+    model = Backflow(num_orbital=input_shape, num_electron=num_electrons, 
                      hidden_layer_sizes=hidden_layer_sizes,
                      activation=activation)
     initial=jnp.concatenate((jnp.ones(num_electrons),
