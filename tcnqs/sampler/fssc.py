@@ -1,12 +1,11 @@
 import jax.numpy as jnp
 import jax
-import numpy as np
 from . import SAMPLER
-from tcnqs.hamiltonian import HAMILTONIAN
+from tcnqs.hamiltonian import Hamiltonian
 from tcnqs.slater_det import SD
 
 class FSSC(SAMPLER):
-    def __init__(self, wfn, ham: HAMILTONIAN) -> None:
+    def __init__(self, wfn, ham: Hamiltonian) -> None:
         super().__init__(wfn)
         self.ham = ham
         self.n_core = None
@@ -19,7 +18,7 @@ class FSSC(SAMPLER):
         self.init_core = init_core
 
         # sample connected configurations
-        connected = self._sample_connected()
+        connected = self._sample_connected(init_core, n_connected)
         return jnp.concatenate((init_core, connected), axis=0)
     
 

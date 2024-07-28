@@ -1,74 +1,66 @@
 from  itertools import combinations
 import jax.numpy as jnp
+import numpy as np
 from functools import partial
 import jax
 
 
-# valid for equal number of electorns in both spin orbitals
-
-# def generate_connected_space(determinant, n_orb, n_elec):
-#     n_orb = int(n_orb/2)
-#     n_elec = int(n_elec/2)
-#     particles = jnp.where(determinant == 1, size = n_elec)[0]
-#     holes = jnp.where(determinant == 0, size = n_orb - n_elec)[0]
-#     alpha_space = generate_connected_space_spin(determinant[:n_orb], n_orb, n_elec)
-#     beta_space = generate_connected_space_spin(determinant[n_orb:], n_orb, n_elec)
-    
-#     return 0
 
 @partial(jax.jit, static_argnums=(1,2))
-def generate_connected_space(determinant, n_orb, n_elec):
-    n_orb = int(n_orb/2)
-    n_elec = int(n_elec/2)
+def generate_connected_space(determinant: jnp.array, 
+                             n_elec_a: int, n_elec_b: int) -> jnp.array:
     
-    alpha_0 = determinant[:n_orb]
-    beta_0 =  determinant[n_orb:]
-    
-    particles_alpha = jnp.where(alpha_0== 1, size = n_elec)[0]
-    holes_alpha = jnp.where(alpha_0 == 0, size = n_orb - n_elec)[0]
-    
-    particles_beta = jnp.where(beta_0== 1, size = n_elec)[0]
-    holes_beta = jnp.where(beta_0 == 0, size = n_orb - n_elec)[0]
-    
-    alpha_0 = jnp.expand_dims(alpha_0, axis=0)
-    beta_0 = jnp.expand_dims(beta_0, axis=0)
+    n_spa_orb = len(determinant)//2
+    n_holes_a = n_spa_orb - n_elec_a
+    n_holes_b = n_spa_orb - n_elec_b
+
+    det_alpha_0 = determinant[:n_spa_orb]
+    det_beta_0 =  determinant[n_spa_orb:]
     
     
-    alpha_1 = single_excitations(determinant[:n_orb], particles_alpha, holes_alpha)
-    beta_1 = single_excitations(determinant[n_orb:], particles_beta, holes_beta)
-    all_excitations = possible_excitations(jnp.concatenate((alpha_0,alpha_1),axis=0),jnp.concatenate((beta_0,beta_1),axis=0), 2*n_orb)
+    particles_pos_a = jnp.where(det_alpha_0 == 1, size = n_elec_a)[0]
+    holes_pos_a = jnp.where(det_alpha_0 == 0, size = n_holes_a)[0]
     
-    alpha_2 = double_excitations(determinant[:n_orb], particles_alpha, holes_alpha)
-    beta_2 = double_excitations(determinant[n_orb:], particles_beta, holes_beta)
-    all_excitations = jnp.concatenate((all_excitations,possible_excitations(alpha_2, beta_0, 2*n_orb)),axis=0)
-    all_excitations = jnp.concatenate((all_excitations,possible_excitations(alpha_0, beta_2, 2*n_orb)),axis=0)
+    particles_pos_b = jnp.where(det_beta_0== 1, size = n_elec_b)[0]
+    holes_pos_b = jnp.where(det_beta_0 == 0, size = n_holes_b)[0]
+    
+    det_alpha_0 = jnp.expand_dims(det_alpha_0, axis=0)
+    det_beta_0 = jnp.expand_dims(det_beta_0, axis=0)
+
+    dets_alpha = det_alpha_0.copy()
+    dets_beta = det_beta_0.copy()
+    
+    if n_elec_a > 0 and n_holes_a > 0: 
+        det_alpha_1 = single_excitations(determinant[:n_spa_orb], particles_pos_a, holes_pos_a)
+        dets_alpha = jnp.concatenate((dets_alpha, det_alpha_1),axis=0)
+
+    if n_elec_b > 0 and n_holes_b > 0: 
+        det_beta_1 = single_excitations(determinant[n_spa_orb:], particles_pos_b, holes_pos_b)
+        dets_beta = jnp.concatenate((dets_beta, det_beta_1),axis=0)
+
+    all_excitations = possible_excitations(dets_alpha, dets_beta, 2*n_spa_orb)
+                                           
+    if n_elec_a > 1  and n_holes_a > 1:
+        det_alpha_2 = double_excitations(determinant[:n_spa_orb], particles_pos_a, holes_pos_a)
+        all_excitations = jnp.concatenate((all_excitations,
+                                           possible_excitations(det_alpha_2, det_beta_0, 2*n_spa_orb)),axis=0)
+    if n_elec_b > 1 and n_holes_b > 1:
+        det_beta_2 = double_excitations(determinant[n_spa_orb:], particles_pos_b, holes_pos_b)
+        all_excitations = jnp.concatenate((all_excitations,
+                                           possible_excitations(det_alpha_0, det_beta_2, 2*n_spa_orb)),axis=0)
     
     return all_excitations
     
     
-    # particles = jnp.where(determinant == 1, size = n_elec)[0]
-    # holes = jnp.where(determinant == 0, size = n_orb - n_elec)[0]
-    # return jnp.concatenate((single_excitations(determinant,particles,holes),
-    #                         double_excitations(determinant,particles,holes),
-    #                         determinant.reshape(1, len(determinant))),axis=0)
-
-#@partial(jax.vmap, in_axes=(0,0))
-def possible_excitations(alpha,beta,n_orb):
+# why not using the vmap here?
+#@partial(jax.vmap, in_axes=(0,1))
+def possible_excitations(alpha, beta, n_orb):
     i,j =jnp.meshgrid(jnp.arange(len(alpha)),jnp.arange(len(beta)), indexing='ij')
-    return jnp.concatenate((alpha[i],beta[j]),axis=2).reshape(-1,n_orb)
+    return jnp.concatenate((alpha[i],beta[j]), axis=2).reshape(-1, n_orb)
 
 #@jax.jit
 def single_excitations(determinant, particle_pos , hole_pos):
-    # connected_space_single = []
-    # for i in particle_pos:
-    #     for j in hole_pos:
-    #         single_excitation = determinant
-    #         single_excitation = single_excitation.at[i].set(0)
-    #         single_excitation = single_excitation.at[j].set(1)
-    #         connected_space_single.append(single_excitation) 
-    # return jnp.asarray(connected_space_single, dtype=jnp.uint8)
-    
-    i,j=jnp.meshgrid(particle_pos,hole_pos, indexing='ij')
+    i,j=jnp.meshgrid(particle_pos, hole_pos, indexing='ij')
     particle_hole_pairs=jnp.array([i,j]).reshape(2,-1).T
     
     return excite_single(particle_hole_pairs, determinant)
@@ -79,9 +71,11 @@ def excite_single(pair,determinant):
 
 #@jax.jit
 def double_excitations(determinant, particle_pos, hole_pos):
-    particles_select = jnp.asarray(list(combinations(particle_pos,2)))
+
+    particles_select = jnp.asarray(list(combinations(particle_pos, 2)))
     holes_select = jnp.asarray(list(combinations(hole_pos,2)))
-    i,j =jnp.meshgrid(jnp.arange(len(particles_select)),jnp.arange(len(holes_select)), indexing='ij')
+    i,j =jnp.meshgrid(jnp.arange(len(particles_select)),
+                      jnp.arange(len(holes_select)), indexing='ij')
 
     particle_hole_pairs=jnp.array([i,j]).reshape(2,-1).T
     
@@ -106,5 +100,17 @@ def excite_double(pair, particles_select, holes_select , determinant):
     
 if __name__ == '__main__':
     det= jnp.array([1,0,0,1,0,1,0,1,0,0], dtype=jnp.uint8)
-    a = generate_connected_space(det, 10 ,4)
-    print(a.shape)
+    a = generate_connected_space(det,2,2)
+    assert a.shape == (55,10)
+
+    det= jnp.array([1,0,0,0,0,1,0,0,0,0], dtype=jnp.uint8)
+    a = generate_connected_space(det,1,1)
+    assert a.shape == (25,10)
+
+    det= jnp.array([1,1,0,0,0,1,0,0,0,0], dtype=jnp.uint8)
+    a = generate_connected_space(det,2,1)
+    assert a.shape == (38,10)
+
+    det= jnp.array([1,1,0,1,0,0], dtype=jnp.uint8)
+    a = generate_connected_space(det,2,1)
+    assert a.shape == (9,6)

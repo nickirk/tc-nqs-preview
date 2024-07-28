@@ -108,7 +108,7 @@ def train_step_log(state,batch):
     return state, loss_fn(state.params)
 
 @jax.jit
-def train_step_hamiltonian(state,batch,H):
+def train_step_hamiltonian(state, batch, H):
     def hamiltonian_loss(params,apply_fn,x,H):
     
         preds = apply_fn({'params': params}, x)
@@ -149,7 +149,7 @@ def train_step_connections(state, batch, Hamiltonain):
         #return apply_fn({'params': params}, det)
        
         def overlap(slater_determinant, C_i):
-            connected_space = generate_connected_space(slater_determinant, Hamiltonain.n_orb, Hamiltonain.n_elec)
+            connected_space = generate_connected_space(slater_determinant, Hamiltonain.n_elec_a, Hamiltonain.n_elec_b)
             psi_H_xi = jax.vmap(Hamiltonain,in_axes=(None,0))(slater_determinant,connected_space)
             xi_psi = jax.vmap(find_Ci,in_axes=0)(connected_space)
             # xi_psi = 
@@ -169,5 +169,7 @@ def train_step_connections(state, batch, Hamiltonain):
     return state, loss_fn(state.params)
 
 def create_train_state(rng, model, variables):
-    tx = optax.adam(learning_rate=0.001)
+    tx = optax.adam(learning_rate=0.01)
     return train_state.TrainState.create(apply_fn=model.apply, params=variables['params'], tx=tx)
+
+
