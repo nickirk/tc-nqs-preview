@@ -3,7 +3,7 @@ import jax
 import numpy as np
 from . import SAMPLER
 from tcnqs.hamiltonian import HAMILTONIAN
-from tcnqs.slater_det import SD
+#from tcnqs.slater_det import SD
 
 class FSSC(SAMPLER):
     def __init__(self, wfn, ham: HAMILTONIAN) -> None:

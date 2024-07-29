@@ -18,6 +18,15 @@ import jax
 
 @partial(jax.jit, static_argnums=(1,2))
 def generate_connected_space(determinant, n_orb, n_elec):
+    """
+    Args:
+        determinant (array uint8): slate determinant
+        n_orb (int): number of orbitals
+        n_elec (int): number of electrons
+
+    Returns:
+        connected space (array of slater detetrminants): array of connected determinants
+    """
     n_orb = int(n_orb/2)
     n_elec = int(n_elec/2)
     

@@ -134,34 +134,41 @@ def train_step_connections(state, batch, Hamiltonain):
         C_i = apply_fn({'params': params}, x)
         #a= apply_fn({'params': params}, jnp.expand_dims(x[5],axis=0))
         Norm = jnp.linalg.norm(C_i)
-        
+        # x_connected,C_i_connected=[],[]
+
         def find_Ci(det):
-            c=jnp.all(x==det,axis=1)
-            ## Lax condition if teh array doesnt have any True values
-            ## Debug and test this line
-            # define lambda function 
-            # return jax.lax.cond(jnp.any(c), lambda x: jnp.asarray(C_i[jnp.where(c,size = 1)[0][0]]),
-            # lambda : apply_fn({'params': params}, det)  )
+            condition=jnp.all(x==det,axis=1)
+            return jax.lax.cond(jnp.any(condition), Ci_in_preds, 
+                                Ci_not_in_preds,(det,condition))
             
-            # return jax.lax.cond(jnp.any(c), lambda x: jnp.asarray(C_i[jnp.where(c,size = 1)[0][0]]),lambda x: apply_fn, ({'params': params}, det))                            
+        def Ci_in_preds(input_tuple):
+            det,cond = input_tuple
+            return jnp.asarray(C_i[jnp.where(cond,size = 1)[0][0]]), det, False
+        
+        def Ci_not_in_preds(input_tuple):
+            det,cond = input_tuple
+            ci = apply_fn({'params': params}, jnp.expand_dims(det,axis=0))
+            # C_i_connected.append(ci)
+            # x_connected.append(det)
+            # jax.debug.breakpoint()
+            # jax.debug.print("{det}",det=det)
+            return ci[0],det,True            
             
-            return jnp.asarray(C_i[jnp.where(c,size = 1)[0][0]])
-        #return apply_fn({'params': params}, det)
-       
+
         def overlap(slater_determinant, C_i):
             connected_space = generate_connected_space(slater_determinant, Hamiltonain.n_orb, Hamiltonain.n_elec)
             psi_H_xi = jax.vmap(Hamiltonain,in_axes=(None,0))(slater_determinant,connected_space)
-            xi_psi = jax.vmap(find_Ci,in_axes=0)(connected_space)
-            # xi_psi = 
+            xi_psi = jax.vmap(find_Ci,in_axes=0)(connected_space)[0]
             return C_i*jnp.dot(psi_H_xi,xi_psi)
             
         overlap_coeff = jnp.sum(jax.vmap(overlap, in_axes =(0,0))(x,C_i))
         
+        # jax.debug.breakpoint()
+        # jax.debug.print("{det}",det=det)
         return overlap_coeff/Norm**2
     
     def loss_fn(params):
-        x, y = batch
-        loss = hamiltonian_loss(params, state.apply_fn, x, Hamiltonain)
+        loss = hamiltonian_loss(params, state.apply_fn, batch, Hamiltonain)
         return loss
 
     grads = jax.grad(loss_fn)(state.params)
@@ -169,5 +176,5 @@ def train_step_connections(state, batch, Hamiltonain):
     return state, loss_fn(state.params)
 
 def create_train_state(rng, model, variables):
-    tx = optax.adam(learning_rate=0.001)
+    tx = optax.adam(learning_rate=0.00005)
     return train_state.TrainState.create(apply_fn=model.apply, params=variables['params'], tx=tx)

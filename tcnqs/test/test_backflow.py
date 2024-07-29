@@ -10,6 +10,7 @@ from tcnqs.utils import generate_ci_data
 import tcnqs.backflow as bf
 from tcnqs.test.test_hamiltoian import test_hamiltonian_jit as test_hamiltonian
 from tcnqs.hamiltonian_jit import HAMILTONIAN
+from tcnqs.sampler.connected_dets import generate_connected_space
 
 
 def test_backflow_supervised(mol, random_key):
@@ -118,6 +119,9 @@ def test_backflow_unsupervised(mol, random_key, num_epochs=2400, test = False):
     return train_losses_bf
 
 def test_backflow_connected(mol, random_key , num_epochs=2400, test=False):
+    if test:
+        jax.config.update("jax_enable_x64", True)
+    
     rng = random.PRNGKey(random_key)
     
     myhf = mol.RHF().run()
@@ -139,31 +143,34 @@ def test_backflow_connected(mol, random_key , num_epochs=2400, test=False):
     hamiltonian = HAMILTONIAN(n_elec, 2*n_sites, h1e_s, g2e_s)
     
     x_train, y_train = generate_ci_data(num_orbitals,num_alpha_electrons,num_beta_electrons,ci_vector)
-    x_train = jnp.asarray(x_train,dtype=jnp.uint8)
+    x_train = jnp.asarray(x_train,dtype=jnp.uint8)[:30]
     # hamiltonian , ecore = test_hamiltonian(mol)
-
-    
     num_orbitals = 2*myhf.mo_coeff.shape[1]
-    num_samples = len(y_train) 
+    
+    n_core = 20
+    # hfs = jnp.concatenate((jnp.ones(num_alpha_electrons), jnp.zeros(int(num_orbitals/2) - num_alpha_electrons)))  
+    # hf = jnp.concatenate((hfs, hfs),dtype=jnp.uint8)
+    # x_train =  generate_connected_space(hf, num_orbitals, num_alpha_electrons+num_beta_electrons)[:n_core]
+    
+    # num_samples = len(y_train) 
 
     model_bf, variables_bf = bf.create_model(rng, input_shape = num_orbitals, 
                                             num_electrons= num_alpha_electrons + num_beta_electrons
-                                ,hidden_layer_sizes=[4],activation='tanh')
+                                ,hidden_layer_sizes=[],activation='tanh')
     state_bf = bf.create_train_state(rng, model_bf, variables_bf)
     
     # num_epochs = 400
-    batch_size = num_samples
+    #batch_size = num_samples
     train_losses_bf = []
     #nwf = jax.jit(bf.train_step_connections)
+    
     for epoch in range(num_epochs):
         epoch_loss_bf = 0.0
-        for i in range(0, num_samples, batch_size):
-            batch = (x_train[i:i+batch_size], y_train[i:i+batch_size])
             
-            state_bf, loss_bf = bf.train_step_connections(state_bf, batch, hamiltonian)
-            epoch_loss_bf += loss_bf
+        state_bf, loss_bf = bf.train_step_connections(state_bf, x_train, hamiltonian)
+        epoch_loss_bf += loss_bf
         
-        average_epoch_loss_bf = epoch_loss_bf / (num_samples // batch_size)
+        average_epoch_loss_bf = epoch_loss_bf #/ num_samples // num_samples
         train_losses_bf.append(average_epoch_loss_bf + ecore)
         
         print(f"Epoch {epoch+1} , Loss_bf: {average_epoch_loss_bf+ ecore}")
@@ -184,4 +191,4 @@ if __name__ == '__main__':
 
     # test_backflow_supervised(mol, 0)
     #test_backflow_unsupervised(mol,17, )#test=True)
-    test_backflow_connected(mol, 17, )#test= True)
+    test_backflow_connected(mol, 17, num_epochs=6000 )#test= True)
