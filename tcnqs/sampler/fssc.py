@@ -1,10 +1,10 @@
 import jax.numpy as jnp
 import jax
-from . import SAMPLER
+from . import Sampler
 from tcnqs.hamiltonian import Hamiltonian
 from tcnqs.slater_det import SD
 
-class FSSC(SAMPLER):
+class FSSC(Sampler):
     def __init__(self, wfn, ham: Hamiltonian) -> None:
         super().__init__(wfn)
         self.ham = ham

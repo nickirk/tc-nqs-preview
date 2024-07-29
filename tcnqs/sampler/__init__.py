@@ -2,7 +2,7 @@ import jax.numpy as jnp
 import numpy as np
 # abstract class for sampler
 # with abstract member functions for sampling and calculating energy
-class SAMPLER:
+class Sampler:
     def __init__(self, wfn) -> None:
         self.wfn = wfn
         # n_u: unique number of configurations

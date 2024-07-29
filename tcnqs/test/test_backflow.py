@@ -7,6 +7,7 @@ import jax
 from tcnqs.fcidump import read_2_spin_orbital_seprated as read2
 from tcnqs.utils import generate_ci_data, build_ham_from_pyscf
 import tcnqs.backflow as bf
+import tcnqs.trainer as trainer
 
 
 def test_backflow_supervised(mol, random_key):
@@ -25,7 +26,7 @@ def test_backflow_supervised(mol, random_key):
     model, variables = bf.create_model(rng, input_size,
                                        num_electrons=num_alpha_electrons+num_beta_electrons,
                                        hidden_layer_sizes=[4,4], activation='tanh')
-    state = bf.create_train_state(rng, model, variables)
+    state = trainer.create_train_state(rng, model, variables)
     #print(variables)
     # Training loop
     num_epochs = 50
@@ -43,7 +44,7 @@ def test_backflow_supervised(mol, random_key):
 
         for i in range(0, num_samples, batch_size):
             batch = (x_train[i:i+batch_size], y_train[i:i+batch_size])
-            state, loss = bf.train_step_log(state, batch)
+            state, loss = trainer.train_step_log(state, batch)
             epoch_loss += loss
         
         average_epoch_loss = epoch_loss / (num_samples // batch_size)
@@ -98,7 +99,7 @@ def test_backflow_unsupervised(mol, random_key, num_epochs=2400, test = False):
     model_bf, variables_bf = bf.create_model(rng, input_shape = num_orbitals,
                                 num_electrons=num_alpha_electrons+num_beta_electrons
                                 ,hidden_layer_sizes=[4],activation='tanh')
-    state_bf = bf.create_train_state(rng, model_bf, variables_bf)
+    state_bf = trainer.create_train_state(rng, model_bf, variables_bf)
     
     # num_epochs = 400
     batch_size = num_samples
@@ -109,7 +110,7 @@ def test_backflow_unsupervised(mol, random_key, num_epochs=2400, test = False):
         for i in range(0, num_samples, batch_size):
             batch = (x_train[i:i+batch_size], y_train[i:i+batch_size])
             
-            state_bf, loss_bf = bf.train_step_hamiltonian(state_bf, batch, H)
+            state_bf, loss_bf = trainer.train_step_hamiltonian(state_bf, batch, H)
             epoch_loss_bf += loss_bf
         
         average_epoch_loss_bf = epoch_loss_bf / (num_samples // batch_size)
@@ -153,17 +154,19 @@ def test_backflow_connected(mol, random_key , num_epochs=2400, test=False):
     model_bf, variables_bf = bf.create_model(rng, input_shape = num_orbitals, 
                                             num_electrons= hamiltonian.n_elec
                                 ,hidden_layer_sizes=[], activation='tanh')
-    state_bf = bf.create_train_state(rng, model_bf, variables_bf)
+    state_bf = trainer.create_train_state(rng, model_bf, variables_bf)
     
     # num_epochs = 400
     #batch_size = num_samples
     train_losses_bf = []
-    #nwf = jax.jit(bf.train_step_connections)
+    #nwf = jax.jit(trainer.train_step_connections)
     
     for epoch in range(num_epochs):
         epoch_loss_bf = 0.0
+        len_random  = np.random.randint(10, len(x_train))
+        x_train_tmp = x_train[:len_random]
             
-        state_bf, loss_bf = bf.train_step_connections(state_bf, x_train, hamiltonian)
+        state_bf, loss_bf = trainer.train_step_connections(state_bf, x_train_tmp, hamiltonian)
         epoch_loss_bf += loss_bf
         
         average_epoch_loss_bf = epoch_loss_bf # / (num_samples // batch_size)
