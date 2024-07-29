@@ -12,7 +12,7 @@ from functools import partial
 
 from tcnqs.sampler.connected_dets import generate_connected_space
 
-class BACKFLOW(nn.Module):
+class Backflow(nn.Module):
 
     num_orbital: int
     num_electron: int
@@ -55,7 +55,7 @@ def positive_random_init(key, shape, dtype=jnp.float32):
 
 def create_model(rng, input_shape, num_electrons, hidden_layer_sizes=[4],    
                  activation='relu'): 
-    model = BACKFLOW(num_orbital=input_shape, num_electron=num_electrons, 
+    model = Backflow(num_orbital=input_shape, num_electron=num_electrons, 
                      hidden_layer_sizes=hidden_layer_sizes,
                      activation=activation)
     initial=jnp.concatenate((jnp.ones(num_electrons),
@@ -108,7 +108,7 @@ def train_step_log(state,batch):
     return state, loss_fn(state.params)
 
 @jax.jit
-def train_step_hamiltonian(state,batch,H):
+def train_step_hamiltonian(state, batch, H):
     def hamiltonian_loss(params,apply_fn,x,H):
     
         preds = apply_fn({'params': params}, x)
@@ -156,7 +156,7 @@ def train_step_connections(state, batch, Hamiltonain):
             
 
         def overlap(slater_determinant, C_i):
-            connected_space = generate_connected_space(slater_determinant, Hamiltonain.n_orb, Hamiltonain.n_elec)
+            connected_space = generate_connected_space(slater_determinant, Hamiltonain.n_elec_a, Hamiltonain.n_elec_b)
             psi_H_xi = jax.vmap(Hamiltonain,in_axes=(None,0))(slater_determinant,connected_space)
             xi_psi = jax.vmap(find_Ci,in_axes=0)(connected_space)[0]
             return C_i*jnp.dot(psi_H_xi,xi_psi)
@@ -176,5 +176,7 @@ def train_step_connections(state, batch, Hamiltonain):
     return state, loss_fn(state.params)
 
 def create_train_state(rng, model, variables):
-    tx = optax.adam(learning_rate=0.00005)
+    tx = optax.adam(learning_rate=0.01)
     return train_state.TrainState.create(apply_fn=model.apply, params=variables['params'], tx=tx)
+
+
