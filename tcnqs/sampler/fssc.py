@@ -18,24 +18,23 @@ class FSSC(Sampler):
     
     
     #@partial(jax.jit, static_argnums=(0))    
-    def initialize(self, state):
-        
+    def initialize(self, state) -> tuple[jnp.ndarray, jnp.ndarray]:
         alpha = jnp.concatenate((jnp.ones(self.n_elec_a),jnp.zeros(int(self.n_spac_orb/2)-self.n_elec_a)), dtype=jnp.uint8)
         beta = jnp.concatenate((jnp.ones(self.n_elec_b),jnp.zeros(int(self.n_spac_orb/2)-self.n_elec_b)), dtype=jnp.uint8)
         hartree_fock = jnp.concatenate((alpha,beta))
         cisd_space = generate_connected_space(hartree_fock, self.n_elec_a, self.n_elec_b)
         
         ## 3 is arbitary here
-        number = 3*jnp.asarray(jnp.ceil(self.n_core/len(cisd_space)),dtype=jnp.int32)
-        core_space = jnp.empty((0,self.n_spac_orb), dtype=jnp.uint8)
-        for i in range(1,number+1,1):
+        number = 3*int(jnp.ceil(self.n_core/len(cisd_space)))
+        core_space = jnp.empty((0, self.n_spac_orb), dtype=jnp.uint8)
+        for i in range(1, number+1, 1):
             single_sd_connected_space = generate_connected_space(cisd_space[i], self.n_elec_a, self.n_elec_b)#[1:] # remove the core determinant
             determinants_to_append = self.find_sd_in_space(single_sd_connected_space, core_space, cisd_space)
             
-            core_space = jnp.concatenate((core_space,determinants_to_append)) 
+            core_space = jnp.concatenate((core_space, determinants_to_append)) 
             
         core_space = jnp.concatenate((core_space, cisd_space))
-        sorted_indices = jnp.argsort(jnp.sum(core_space,axis=1))[::-1]
+        sorted_indices = jnp.argsort(jnp.sum(core_space, axis=1))[::-1]
         sorted_core_space = core_space[sorted_indices][:self.n_core]
         connected = self._sample_connected(sorted_core_space)
         

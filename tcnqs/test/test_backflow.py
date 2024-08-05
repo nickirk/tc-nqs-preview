@@ -206,8 +206,8 @@ def test_backflow_fssc(mol, random_key , num_epochs=2400, test=False):
     # num_samples = len(y_train) 
 
     model_bf, variables_bf = bf.create_model(rng, input_shape = num_orbitals, 
-                                            num_electrons= hamiltonian.n_elec
-                                ,hidden_layer_sizes=[4], activation='tanh')
+                                            num_electrons= hamiltonian.n_elec,
+                                            hidden_layer_sizes=[4], activation='tanh')
     state_bf = trainer.create_train_state(rng, model_bf, variables_bf)
     
     # num_epochs = 400
