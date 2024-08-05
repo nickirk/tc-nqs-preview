@@ -223,8 +223,8 @@ def test_backflow_fssc(mol, random_key , num_epochs=2400, test=False):
     
     for epoch in range(num_epochs):
         epoch_loss_bf = 0.0
-        len_random  = np.random.randint(10, len(x_train))
-        x_train_tmp = x_train[:len_random]
+        # len_random  = np.random.randint(10, len(x_train))
+        # x_train_tmp = x_train[:len_random]
             
         state_bf, loss_bf = trainer.train_step_fssc(state_bf, sample, hamiltonian)
         
