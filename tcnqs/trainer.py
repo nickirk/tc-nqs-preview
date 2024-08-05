@@ -6,6 +6,7 @@ from flax.training import train_state
 
 from functools import partial
 from tcnqs.sampler.connected_dets import generate_connected_space
+from tcnqs.sampler.fssc import FSSC
 
 @jax.jit
 def train_step(state, batch):
@@ -108,7 +109,8 @@ def train_step_connections(state, batch, Hamiltonain):
     state = state.apply_gradients(grads=grads)
     return state, loss_fn(state.params)
 
-def train_step_fssc(state, sample, Hamiltonain):
+#@partial(jax.jit, static_argnums=(2,3))
+def train_step_fssc(state, last_sample, Hamiltonain, sampler):
     """
     Parameters
     ----------
@@ -117,10 +119,13 @@ def train_step_fssc(state, sample, Hamiltonain):
     batch : jnp.ndarray, the full Hilbert space determinants. 
     Hamiltonain : Hamiltonian, the Hamiltonian object.
     """
-    def hamiltonian_loss(params, apply_fn, sample, Hamiltonain):
+    def hamiltonian_loss(params, apply_fn, last_sample, Hamiltonain,sampler):
         ## Sample is a tuple of x and C_i (x , C_i)
         # C_i = sample[1] 
         #a= apply_fn({'params': params}, jnp.expand_dims(x[5],axis=0))
+        #sampler = FSSC(n_core, hamiltonian.n_elec_a, hamiltonian.n_elec_b, num_orbitals)
+        sample = sampler.next_sample(last_sample, params, apply_fn)
+        
         Norm = jnp.linalg.norm(sample[1])
         # x_connected,C_i_connected=[],[]
         
@@ -135,20 +140,21 @@ def train_step_fssc(state, sample, Hamiltonain):
             xi_psi = jax.vmap(find_Ci,in_axes=0)(connected_space)[0]
             return C_i*jnp.dot(psi_H_xi,xi_psi)
             
-        overlap_coeff = jnp.sum(jax.vmap(overlap, in_axes =(0,0))(sample[0],sample[1]))
+        overlap_coeff = jnp.sum(jax.vmap(overlap, in_axes =(0,0))(sample[0][:sampler.n_core],sample[1][:sampler.n_core]))
         
         # jax.debug.breakpoint()
         # jax.debug.print("{det}",det=det)
-        return overlap_coeff/Norm**2
+        return overlap_coeff/Norm**2, sample
     
     def loss_fn(params):
-        loss = hamiltonian_loss(params, state.apply_fn, sample, Hamiltonain)
+        loss , sample = hamiltonian_loss(params, state.apply_fn, last_sample, Hamiltonain, sampler)
         return loss
 
     grads = jax.grad(loss_fn)(state.params)
     state = state.apply_gradients(grads=grads)
-    return state, loss_fn(state.params)
+    loss, new_sample = hamiltonian_loss(state.params, state.apply_fn, last_sample, Hamiltonain, sampler)
+    return state, loss, new_sample
 
 def create_train_state(rng, model, variables):
-    tx = optax.adam(learning_rate=0.001)
+    tx = optax.adam(learning_rate=0.01)
     return train_state.TrainState.create(apply_fn=model.apply, params=variables['params'], tx=tx)

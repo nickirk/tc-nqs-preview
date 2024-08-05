@@ -9,7 +9,7 @@ from jax.nn.initializers import normal
 from functools import partial
 
 from tcnqs.sampler.connected_dets import generate_connected_space
-
+## using float 64 for the determinant to solve the bug temporarily
 class Backflow(nn.Module):
 
     num_orbital: int
@@ -38,16 +38,17 @@ class Backflow(nn.Module):
     def __call__(self, x):
         
         selected_config = jnp.nonzero(x, size=self.num_electron)[0]
-        
+        #def neural_process(x):
         for dense_layer in self.hidden_dense:
             x = dense_layer(x)
             x = self.activation_fn(x)
 
         x = self.dense_general(x)
         x = x[selected_config , :]
-        x = jnp.linalg.det(x)#*jnp.sqrt(1/(self.num_electron))
+        x = jnp.float64(jnp.linalg.det(x))#*jnp.sqrt(1/(self.num_electron))
+        #return x 
         
-        return jax.lax.cond(jnp.sum(selected_config)==0, lambda :(0.0),lambda :  jnp.float64(x))
+        return jax.lax.cond(jnp.sum(selected_config)==0, lambda : (0.0),lambda : x)
     
 def positive_random_init(key, shape, dtype=jnp.float32):
     return random.uniform(key, shape, dtype, minval=0, maxval=0.2)

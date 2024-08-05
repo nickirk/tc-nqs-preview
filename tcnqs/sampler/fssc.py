@@ -15,7 +15,9 @@ class FSSC(Sampler):
         self.n_elec_b = n_elec_b
         self.n_spac_orb = n_spac_orb
         #self.n_connected = n_connected
-        
+    
+    
+    #@partial(jax.jit, static_argnums=(0))    
     def initialize(self, state):
         
         alpha = jnp.concatenate((jnp.ones(self.n_elec_a),jnp.zeros(int(self.n_spac_orb/2)-self.n_elec_a)), dtype=jnp.uint8)
@@ -24,7 +26,7 @@ class FSSC(Sampler):
         cisd_space = generate_connected_space(hartree_fock, self.n_elec_a, self.n_elec_b)
         
         ## 3 is arbitary here
-        number = 3*int(jnp.ceil(self.n_core/len(cisd_space)))
+        number = 3*jnp.asarray(jnp.ceil(self.n_core/len(cisd_space)),dtype=jnp.int32)
         core_space = jnp.empty((0,self.n_spac_orb), dtype=jnp.uint8)
         for i in range(1,number+1,1):
             single_sd_connected_space = generate_connected_space(cisd_space[i], self.n_elec_a, self.n_elec_b)#[1:] # remove the core determinant
@@ -42,10 +44,10 @@ class FSSC(Sampler):
         return (full_space, state.apply_fn({'params': state.params}, full_space))
             
         
-    
-    def next_sample(self, last_sample, state) -> jnp.ndarray:
+    #@partial(jax.jit, static_argnums=(0))    
+    def next_sample(self, last_sample, params, apply_fn) -> jnp.ndarray:   #input: state instead of params,last_sample
         last_slater_determinants = last_sample[0]
-        preds = state.apply_fn({'params': state.params}, last_slater_determinants)
+        preds = apply_fn({'params': params}, last_slater_determinants)
         
         # Reorder Ci and slater_determinants in decreasing order of mod of Ci
         sorted_indices = jnp.argsort(jnp.abs(preds))[::-1]
@@ -70,10 +72,10 @@ class FSSC(Sampler):
         
         def Ci_not_in_preds(input_tuple):
             det,cond = input_tuple
-            ci = state.apply_fn({'params': state.params}, jnp.expand_dims(det,axis=0))
+            ci = apply_fn({'params': params}, jnp.expand_dims(det,axis=0))
             return ci[0]
-        
-        return (full_space, find_Ci(full_space))
+        ##jnp.asarray(full_space,dtype=jnp.uint8), jnp.asarray(find_Ci(full_space),jnp.uint8)
+        return (jnp.asarray(full_space,dtype=jnp.uint8), jnp.asarray(find_Ci(full_space),jnp.float64))
         
     @partial(jax.vmap, in_axes=(None, 0, None, None))    
     def find_sd_in_space(self,det,core_space,connected_space):
@@ -82,11 +84,10 @@ class FSSC(Sampler):
         
         condition_or = jnp.logical_not(jnp.logical_or(jnp.any(condition_core) , jnp.any(condition_connected)))
         
-        return jax.lax.cond(condition_or, lambda : det, lambda : jnp.zeros(self.n_spac_orb,dtype=jnp.uint8))
+        return jax.lax.cond(condition_or, lambda : det, lambda : jnp.zeros(self.n_spac_orb, dtype=jnp.uint8))
         #return jnp.any(condition)
        
-    ## Can be more efficient
-        
+    ## Can be more efficient    
     def _sample_connected(self, core: jnp.ndarray) -> jnp.ndarray:
         connected = jnp.empty((0,self.n_spac_orb), dtype=jnp.uint8)
         
