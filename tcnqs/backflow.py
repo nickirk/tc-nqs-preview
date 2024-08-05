@@ -46,7 +46,8 @@ class Backflow(nn.Module):
         x = self.dense_general(x)
         x = x[selected_config , :]
         x = jnp.linalg.det(x)#*jnp.sqrt(1/(self.num_electron))
-        return x
+        
+        return jax.lax.cond(jnp.sum(selected_config)==0, lambda :(0.0),lambda :  jnp.float64(x))
     
 def positive_random_init(key, shape, dtype=jnp.float32):
     return random.uniform(key, shape, dtype, minval=0, maxval=0.2)

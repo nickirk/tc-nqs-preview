@@ -51,7 +51,7 @@ if __name__ == '__main__':
     
     mol = pyscf.M(
     atom = 'H 0 0 0; H 0 0 1.0 ;H 0 0 2;',  
-    basis = '321g',
+    basis = 'sto-3g',
     spin = 1,
     charge = 0,
     symmetry = False

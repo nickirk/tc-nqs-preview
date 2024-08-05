@@ -75,8 +75,7 @@ def read_2_spin(fcidump_file):
 
 def read_2_spin_orbital_seprated(fcidump_file):
     n_sites, n_elec, ecore, h1e, g2e = read(fcidump_file)
-    # Check Logic again: We have 2 spin seprated orbitals collated together
-    # h1e_s = np.kron(h1e, np.eye(2))
+    
     h1e_s = np.kron(np.eye(2),h1e)
     g2e_s = np.zeros(np.asarray(g2e.shape)*2)
     for i in range(n_sites):

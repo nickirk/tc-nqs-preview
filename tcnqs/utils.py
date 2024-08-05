@@ -5,11 +5,31 @@ from pyscf.tools import fcidump
 from tcnqs.hamiltonian import Hamiltonian
 from tcnqs.fcidump import read_2_spin_orbital_seprated as read2
 
-def generate_ci_data(num_orbitals,num_alpha_electrons,num_beta_electrons,ci):
+def generate_ci_data(num_orbitals, num_alpha_electrons, num_beta_electrons, ci):
     """
+    Generate data for configuration interaction (CI) calculations.
+
     Parameters
     ----------
-    num_orbitals : int number of spatial orbitals
+    num_orbitals : int
+        Number of spatial orbitals.
+
+    num_alpha_electrons : int
+        Number of alpha electrons.
+
+    num_beta_electrons : int
+        Number of beta electrons.
+
+    ci : numpy.ndarray
+        Array containing the CI coefficients.
+
+    Returns
+    -------
+    x : jax.numpy.ndarray
+        Array of input features for the CI data.
+
+    y : jax.numpy.ndarray
+        Array of target values for the CI data.
     """
     x=[]
     y=[]
@@ -30,6 +50,17 @@ def generate_ci_data(num_orbitals,num_alpha_electrons,num_beta_electrons,ci):
     return x,y
 
 def convert_binary_to_array(str_int, num_orbitals):
+    """
+    Convert a binary string representation of an integer to an array of bits.
+
+    Parameters:
+    str_int (int): The binary string representation of the integer.
+    num_orbitals (int): The number of orbitals.
+
+    Returns:
+    list: The array of bits, with leading zeros if necessary.
+    """
+    
     binary_str=str(bin(str_int))
     binary_str = binary_str[2:]
     binary_array = [int(bit) for bit in binary_str]

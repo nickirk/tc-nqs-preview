@@ -108,7 +108,7 @@ def train_step_connections(state, batch, Hamiltonain):
     state = state.apply_gradients(grads=grads)
     return state, loss_fn(state.params)
 
-def train_step_fssc(state, batch, Hamiltonain):
+def train_step_fssc(state, sample, Hamiltonain):
     """
     Parameters
     ----------
@@ -117,45 +117,32 @@ def train_step_fssc(state, batch, Hamiltonain):
     batch : jnp.ndarray, the full Hilbert space determinants. 
     Hamiltonain : Hamiltonian, the Hamiltonian object.
     """
-    def hamiltonian_loss(params, apply_fn, x, Hamiltonain):
-        C_i = apply_fn({'params': params}, x)
+    def hamiltonian_loss(params, apply_fn, sample, Hamiltonain):
+        ## Sample is a tuple of x and C_i (x , C_i)
+        # C_i = sample[1] 
         #a= apply_fn({'params': params}, jnp.expand_dims(x[5],axis=0))
-        Norm = jnp.linalg.norm(C_i)
+        Norm = jnp.linalg.norm(sample[1])
         # x_connected,C_i_connected=[],[]
-
-        def find_Ci(det):
-            condition=jnp.all(x==det,axis=1)
-            return jax.lax.cond(jnp.any(condition), Ci_in_preds, 
-                                Ci_not_in_preds,(det,condition))
-            
-        def Ci_in_preds(input_tuple):
-            det,cond = input_tuple
-            return jnp.asarray(C_i[jnp.where(cond,size = 1)[0][0]]), det, False
         
-        def Ci_not_in_preds(input_tuple):
-            det,cond = input_tuple
-            ci = apply_fn({'params': params}, jnp.expand_dims(det,axis=0))
-            # C_i_connected.append(ci)
-            # x_connected.append(det)
-            # jax.debug.breakpoint()
-            # jax.debug.print("{det}",det=det)
-            return ci[0],det,True            
+        def find_Ci(det):
+            condition=jnp.all(sample[0]==det,axis=1)
+            return jnp.asarray(sample[1][jnp.where(condition, size = 1)[0][0]])
             
 
         def overlap(slater_determinant, C_i):
-            connected_space = generate_connected_space(slater_determinant,     Hamiltonain.n_elec_a, Hamiltonain.n_elec_b)
+            connected_space = generate_connected_space(slater_determinant,Hamiltonain.n_elec_a, Hamiltonain.n_elec_b)
             psi_H_xi = jax.vmap(Hamiltonain,in_axes=(None,0))(slater_determinant,connected_space)
             xi_psi = jax.vmap(find_Ci,in_axes=0)(connected_space)[0]
             return C_i*jnp.dot(psi_H_xi,xi_psi)
             
-        overlap_coeff = jnp.sum(jax.vmap(overlap, in_axes =(0,0))(x,C_i))
+        overlap_coeff = jnp.sum(jax.vmap(overlap, in_axes =(0,0))(sample[0],sample[1]))
         
         # jax.debug.breakpoint()
         # jax.debug.print("{det}",det=det)
         return overlap_coeff/Norm**2
     
     def loss_fn(params):
-        loss = hamiltonian_loss(params, state.apply_fn, batch, Hamiltonain)
+        loss = hamiltonian_loss(params, state.apply_fn, sample, Hamiltonain)
         return loss
 
     grads = jax.grad(loss_fn)(state.params)
@@ -163,5 +150,5 @@ def train_step_fssc(state, batch, Hamiltonain):
     return state, loss_fn(state.params)
 
 def create_train_state(rng, model, variables):
-    tx = optax.adam(learning_rate=0.01)
+    tx = optax.adam(learning_rate=0.001)
     return train_state.TrainState.create(apply_fn=model.apply, params=variables['params'], tx=tx)

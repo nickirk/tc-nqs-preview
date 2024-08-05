@@ -53,6 +53,7 @@ def generate_connected_space(determinant: jnp.array,
     
     
 # why not using the vmap here?
+# - Cannot use vmap as it doesnt takes all the possible combinations of alpha and beta
 #@partial(jax.vmap, in_axes=(0,1))
 def possible_excitations(alpha, beta, n_orb):
     i,j =jnp.meshgrid(jnp.arange(len(alpha)),jnp.arange(len(beta)), indexing='ij')
@@ -80,17 +81,6 @@ def double_excitations(determinant, particle_pos, hole_pos):
     particle_hole_pairs=jnp.array([i,j]).reshape(2,-1).T
     
     return excite_double(particle_hole_pairs, particles_select, holes_select, determinant)
-    # connected_space_double = []
-    # for a in particles_select:
-    #     for b in holes_select:
-    #         double_excitation = determinant
-    #         double_excitation = double_excitation.at[a[0]].set(0)
-    #         double_excitation = double_excitation.at[a[1]].set(0)
-    #         double_excitation = double_excitation.at[b[0]].set(1)
-    #         double_excitation = double_excitation.at[b[1]].set(1)
-    #         connected_space_double.append(double_excitation)
-    
-    # return jnp.asarray(connected_space_double, dtype=jnp.uint8)
     
 @partial(jax.vmap, in_axes=(0,None,None,None))
 def excite_double(pair, particles_select, holes_select , determinant):
@@ -101,16 +91,16 @@ def excite_double(pair, particles_select, holes_select , determinant):
 if __name__ == '__main__':
     det= jnp.array([1,0,0,1,0,1,0,1,0,0], dtype=jnp.uint8)
     a = generate_connected_space(det,2,2)
-    assert a.shape == (55,10)
+    assert jnp.unique(a,axis=0).shape == (55,10) and a.shape == (55,10)
 
     det= jnp.array([1,0,0,0,0,1,0,0,0,0], dtype=jnp.uint8)
     a = generate_connected_space(det,1,1)
-    assert a.shape == (25,10)
+    assert jnp.unique(a,axis=0).shape == (25,10) and a.shape == (25,10)
 
     det= jnp.array([1,1,0,0,0,1,0,0,0,0], dtype=jnp.uint8)
     a = generate_connected_space(det,2,1)
-    assert a.shape == (38,10)
+    assert jnp.unique(a,axis=0).shape == (38,10) and a.shape == (38,10)
 
     det= jnp.array([1,1,0,1,0,0], dtype=jnp.uint8)
     a = generate_connected_space(det,2,1)
-    assert a.shape == (9,6)
+    assert jnp.unique(a,axis=0).shape == (9,6) and a.shape == (9,6)

@@ -3,32 +3,112 @@ import jax
 from . import Sampler
 from tcnqs.hamiltonian import Hamiltonian
 from tcnqs.slater_det import SD
+from functools import partial
+from tcnqs.sampler.connected_dets import generate_connected_space
 
 class FSSC(Sampler):
-    def __init__(self, wfn, ham: Hamiltonian) -> None:
-        super().__init__(wfn)
-        self.ham = ham
-        self.n_core = None
-        self.n_connected = None
-    
-    def sample(self, n_u: int, n_core: int, n_connected: int, init_core: jnp.ndarray) -> jnp.ndarray:
-        self.n_u = n_u
+    def __init__(self, n_core, n_elec_a, n_elec_b,n_spac_orb) -> None:
+        # super().__init__(wfn)
+        # self.ham = ham
         self.n_core = n_core
-        self.n_connected = n_connected
-        self.init_core = init_core
-
-        # sample connected configurations
-        connected = self._sample_connected(init_core, n_connected)
-        return jnp.concatenate((init_core, connected), axis=0)
+        self.n_elec_a = n_elec_a
+        self.n_elec_b = n_elec_b
+        self.n_spac_orb = n_spac_orb
+        #self.n_connected = n_connected
+        
+    def initialize(self, state):
+        
+        alpha = jnp.concatenate((jnp.ones(self.n_elec_a),jnp.zeros(int(self.n_spac_orb/2)-self.n_elec_a)), dtype=jnp.uint8)
+        beta = jnp.concatenate((jnp.ones(self.n_elec_b),jnp.zeros(int(self.n_spac_orb/2)-self.n_elec_b)), dtype=jnp.uint8)
+        hartree_fock = jnp.concatenate((alpha,beta))
+        cisd_space = generate_connected_space(hartree_fock, self.n_elec_a, self.n_elec_b)
+        
+        ## 3 is arbitary here
+        number = 3*int(jnp.ceil(self.n_core/len(cisd_space)))
+        core_space = jnp.empty((0,self.n_spac_orb), dtype=jnp.uint8)
+        for i in range(1,number+1,1):
+            single_sd_connected_space = generate_connected_space(cisd_space[i], self.n_elec_a, self.n_elec_b)#[1:] # remove the core determinant
+            determinants_to_append = self.find_sd_in_space(single_sd_connected_space, core_space, cisd_space)
+            
+            core_space = jnp.concatenate((core_space,determinants_to_append)) 
+            
+        core_space = jnp.concatenate((core_space, cisd_space))
+        sorted_indices = jnp.argsort(jnp.sum(core_space,axis=1))[::-1]
+        sorted_core_space = core_space[sorted_indices][:self.n_core]
+        connected = self._sample_connected(sorted_core_space)
+        
+        full_space = jnp.concatenate((sorted_core_space, connected))
+        
+        return (full_space, state.apply_fn({'params': state.params}, full_space))
+            
+        
     
+    def next_sample(self, last_sample, state) -> jnp.ndarray:
+        last_slater_determinants = last_sample[0]
+        preds = state.apply_fn({'params': state.params}, last_slater_determinants)
+        
+        # Reorder Ci and slater_determinants in decreasing order of mod of Ci
+        sorted_indices = jnp.argsort(jnp.abs(preds))[::-1]
+        preds = preds[sorted_indices]
+        last_slater_determinants = last_slater_determinants[sorted_indices]
+        
+        core_space = last_slater_determinants[:self.n_core]
+        # full_connected_space = jax.vmap(generate_connected_space, in_axes=(0, None, None))(core_space, self.n_elec_a, self.n_elec_b)
+        connected_space = self._sample_connected(core_space)
+        
+        full_space = jnp.concatenate((core_space, connected_space)) 
+        
+        @partial(jax.vmap, in_axes=(0))
+        def find_Ci(det):
+            condition=jnp.all(last_slater_determinants==det,axis=1)
+            return jax.lax.cond(jnp.any(condition), Ci_in_preds, 
+                                Ci_not_in_preds,(det,condition))
+            
+        def Ci_in_preds(input_tuple):
+            det,cond = input_tuple
+            return jnp.asarray(preds[jnp.where(cond,size = 1)[0][0]])
+        
+        def Ci_not_in_preds(input_tuple):
+            det,cond = input_tuple
+            ci = state.apply_fn({'params': state.params}, jnp.expand_dims(det,axis=0))
+            return ci[0]
+        
+        return (full_space, find_Ci(full_space))
+        
+    @partial(jax.vmap, in_axes=(None, 0, None, None))    
+    def find_sd_in_space(self,det,core_space,connected_space):
+        condition_core=jnp.all(core_space==det,axis=1)
+        condition_connected=jnp.all(connected_space==det,axis=1)
+        
+        condition_or = jnp.logical_not(jnp.logical_or(jnp.any(condition_core) , jnp.any(condition_connected)))
+        
+        return jax.lax.cond(condition_or, lambda : det, lambda : jnp.zeros(self.n_spac_orb,dtype=jnp.uint8))
+        #return jnp.any(condition)
+       
+    ## Can be more efficient
+        
+    def _sample_connected(self, core: jnp.ndarray) -> jnp.ndarray:
+        connected = jnp.empty((0,self.n_spac_orb), dtype=jnp.uint8)
+        
+        ### For lax.scan function
+        # def generate_unique_space(carry,det):
+        #     single_sd_connected_space = generate_connected_space(det, self.n_elec_a, self.n_elec_b)#[1:] # remove the core determinant
+        #     indices = jnp.where(not self.find_sd_in_space(single_sd_connected_space, core, connected), size= single_sd_connected_space.shape[0])
+        #     _ = 
+        #     connected = jnp.append(connected, _)
+            
+        #     return carry,connected
+        
+        # carry, connected = jax.lax.scan(generate_unique_space, 0, core)
+        
+        
+        for det in core:
+            single_sd_connected_space = generate_connected_space(det, self.n_elec_a, self.n_elec_b)#[1:] # remove the core determinant
+            determinants_to_append = self.find_sd_in_space(single_sd_connected_space, core, connected)
+            connected = jnp.concatenate((connected, determinants_to_append))
+        
+        
+        #connected = connected.reshape(-1, self.n_core)
 
-    def _sample_connected(self, core: jnp.ndarray, n_conn: int) -> jnp.ndarray:
-        def sample_operation(carry, x):
-            connected_samples =  jnp.tile(x, (n_conn, 1))
-            return carry, connected_samples
-        # use jax loop to sample connected configurations
-        carry = None
-        _, connected = jax.lax.scan(sample_operation, carry, core)
-
-        connected = connected.reshape(-1, self.n_core)
+        #connected = connected.reshape(-1, self.n_core)
         return connected
