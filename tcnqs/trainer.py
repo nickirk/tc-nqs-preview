@@ -137,7 +137,7 @@ def train_step_fssc(state, last_sample, Hamiltonain, sampler):
         def overlap(slater_determinant, C_i):
             connected_space = generate_connected_space(slater_determinant,Hamiltonain.n_elec_a, Hamiltonain.n_elec_b)
             psi_H_xi = jax.vmap(Hamiltonain,in_axes=(None,0))(slater_determinant,connected_space)
-            xi_psi = jax.vmap(find_Ci,in_axes=0)(connected_space)[0]
+            xi_psi = jax.vmap(find_Ci,in_axes=0)(connected_space)
             return C_i*jnp.dot(psi_H_xi,xi_psi)
             
         overlap_coeff = jnp.sum(jax.vmap(overlap, in_axes =(0,0))(sample[0][:sampler.n_core],sample[1][:sampler.n_core]))
@@ -156,5 +156,5 @@ def train_step_fssc(state, last_sample, Hamiltonain, sampler):
     return state, loss, new_sample
 
 def create_train_state(rng, model, variables):
-    tx = optax.adam(learning_rate=0.01)
+    tx = optax.adam(learning_rate=0.1)
     return train_state.TrainState.create(apply_fn=model.apply, params=variables['params'], tx=tx)

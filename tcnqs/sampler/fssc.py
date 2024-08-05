@@ -39,6 +39,8 @@ class FSSC(Sampler):
         connected = self._sample_connected(sorted_core_space)
         
         full_space = jnp.concatenate((sorted_core_space, connected))
+        relevant_indices = jnp.where(jnp.logical_not(jnp.all(full_space==jnp.zeros(self.n_spac_orb),axis=1)))[0]
+        full_space = full_space[relevant_indices]
         
         return (full_space, state.apply_fn({'params': state.params}, full_space))
             
@@ -58,6 +60,8 @@ class FSSC(Sampler):
         connected_space = self._sample_connected(core_space)
         
         full_space = jnp.concatenate((core_space, connected_space)) 
+        relevant_indices = jnp.where(jnp.logical_not(jnp.all(full_space==jnp.zeros(self.n_spac_orb),axis=1)))[0]
+        full_space = full_space[relevant_indices]
         
         @partial(jax.vmap, in_axes=(0))
         def find_Ci(det):

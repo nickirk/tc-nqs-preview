@@ -142,7 +142,7 @@ def test_backflow_connected(mol, random_key , num_epochs=2400, test=False):
     
     x_train, y_train = generate_ci_data(hamiltonian.n_orb//2, hamiltonian.n_elec_a, 
                                         hamiltonian.n_elec_b, ci_vector)
-    x_train = jnp.asarray(x_train,dtype=jnp.uint8)[:15]
+    x_train = jnp.asarray(x_train,dtype=jnp.uint8)
     # hamiltonian , ecore = test_hamiltonian(mol)
 
     
@@ -161,10 +161,10 @@ def test_backflow_connected(mol, random_key , num_epochs=2400, test=False):
     
     for epoch in range(num_epochs):
         epoch_loss_bf = 0.0
-        len_random  = np.random.randint(10, len(x_train))
-        x_train_tmp = x_train[:len_random]
+        #len_random  = np.random.randint(10, len(x_train))
+        #x_train_tmp = x_train[:len_random]
             
-        state_bf, loss_bf = trainer.train_step_connections(state_bf, x_train_tmp, hamiltonian)
+        state_bf, loss_bf = trainer.train_step_connections(state_bf, x_train, hamiltonian)
         epoch_loss_bf += loss_bf
         
         average_epoch_loss_bf = epoch_loss_bf # / (num_samples // batch_size)
@@ -207,25 +207,20 @@ def test_backflow_fssc(mol, random_key , num_epochs=2400, test=False):
 
     model_bf, variables_bf = bf.create_model(rng, input_shape = num_orbitals, 
                                             num_electrons= hamiltonian.n_elec,
-                                            hidden_layer_sizes=[4], activation='tanh')
+                                            hidden_layer_sizes=[], activation='tanh')
     state_bf = trainer.create_train_state(rng, model_bf, variables_bf)
     
     # num_epochs = 400
     #batch_size = num_samples
     train_losses_bf = []
     #nwf = jax.jit(trainer.train_step_connections)
-    n_core = 20
+    n_core = 15
     sampler = FSSC(n_core, hamiltonian.n_elec_a, hamiltonian.n_elec_b, num_orbitals)
     sample = sampler.initialize(state_bf)
-    relevant_indices = jnp.where(jnp.logical_not(jnp.all(sample[0]==jnp.zeros(num_orbitals),axis=1)))[0]
-    sample =(sample[0][relevant_indices],sample[1][relevant_indices]) 
     
     
     for epoch in range(num_epochs):
         epoch_loss_bf = 0.0
-        # len_random  = np.random.randint(10, len(x_train))
-        # x_train_tmp = x_train[:len_random]
-        #print("Epoch: ", epoch) 
         state_bf, loss_bf, sample = trainer.train_step_fssc(state_bf, sample, hamiltonian,sampler)
         
         relevant_indices = jnp.where(jnp.logical_not(jnp.all(sample[0]==jnp.zeros(num_orbitals),axis=1)))[0]
@@ -247,7 +242,7 @@ def test_backflow_fssc(mol, random_key , num_epochs=2400, test=False):
 
 if __name__ == '__main__':
     mol = pyscf.M(
-    atom = 'H 0 0 0; H 0 0 1.0 ;',# H 0 0 3.0; H 0 0 4' , # H 0 0 3.0; H 0 0 4.0  
+    atom = 'H 0 0 0; H 0 0 1.0 ; H 0 0 3.0; H 0 0 4' , # H 0 0 3.0; H 0 0 4.0  
     basis = 'sto-3g',
     spin = 0,
     charge = 0,
@@ -256,5 +251,5 @@ if __name__ == '__main__':
 
     # test_backflow_supervised(mol, 0)
     #test_backflow_unsupervised(mol,17, test=True)
-    # test_backflow_connected(mol, 17, )#test= True)
+    #test_backflow_connected(mol, 17, )#test= True)
     test_backflow_fssc(mol, 17, test= True)
