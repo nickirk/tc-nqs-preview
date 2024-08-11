@@ -16,7 +16,8 @@ class Backflow(nn.Module):
     num_electron: int
     hidden_layer_sizes: List[int] = field(default_factory=lambda: [4, 4])
     activation: str = 'relu'
-
+    n_bf_dets: int = 1
+    
     def setup(self) -> None:
         # Map the string to the actual function
         self.activation_fn = {
@@ -33,6 +34,7 @@ class Backflow(nn.Module):
             features=(self.num_orbital, self.num_electron)
             )
         
+        
 
     @partial(jax.vmap, in_axes=(None,0))
     def __call__(self, x):
@@ -42,13 +44,18 @@ class Backflow(nn.Module):
         for dense_layer in self.hidden_dense:
             x = dense_layer(x)
             x = self.activation_fn(x)
-
+        # jax.debug.breakpoint()
         x = self.dense_general(x)
         x = x[selected_config , :]
-        sgn, val = jnp.linalg.slogdet(x)
-        #return x 
-        x = sgn * jnp.exp(val)
+        x = jnp.linalg.det(x)
         
+        ### Slogdet is not a good option as the sgn it provides is discontinous
+        ### This creats a problem in the gradient calculation 
+        
+        #sgn, val = jnp.linalg.slogdet(x)
+        #return x 
+        #x = sgn * jnp.exp(val)
+        # jax.debug.breakpoint()
         return jax.lax.cond(jnp.sum(selected_config)==0, lambda : (0.0),lambda : jnp.float64(x))
     
 def positive_random_init(key, shape, dtype=jnp.float32):

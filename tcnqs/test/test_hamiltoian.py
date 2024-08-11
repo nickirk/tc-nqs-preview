@@ -15,7 +15,9 @@ def run_fci(mol, myhf):
     return fci_e_pyscf, ci_vector
 
 def test_hamiltonian(mol, test=False):
-    
+    if test:
+        jax.config.update("jax_enable_x64", True)
+        
     myhf = mol.RHF().run()
 
     ham = build_ham_from_pyscf(mol, myhf) 

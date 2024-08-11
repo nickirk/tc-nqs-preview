@@ -1,7 +1,7 @@
 import jax
 import jax.numpy as jnp
 import optax
-from jax import vmap
+#from jax import vmap
 from flax.training import train_state
 
 from functools import partial
@@ -109,24 +109,28 @@ def train_step_connections(state, batch, Hamiltonain):
     state = state.apply_gradients(grads=grads)
     return state, loss_fn(state.params)
 
-#@partial(jax.jit, static_argnums=(2,3))
+@partial(jax.jit, static_argnums=(2,3))
 def train_step_fssc(state, last_sample, Hamiltonain, sampler):
     """
     Parameters
     ----------
     state : flax.training.train_state.TrainState
         The current state of the training.
-    batch : jnp.ndarray, the full Hilbert space determinants. 
+    last_sample : tuple (jnp.ndarray,jnp.ndarry), the last sample of the Hilbert 
+                    space determinants and the corresponding C_i coefficients. 
     Hamiltonain : Hamiltonian, the Hamiltonian object.
+    Sampler : FSSC, the FSSC object. 
+              ## or a general sampler depending on future implementations  
     """
+    
     def hamiltonian_loss(params, apply_fn, last_sample, Hamiltonain,sampler):
         ## Sample is a tuple of x and C_i (x , C_i)
         # C_i = sample[1] 
-        #a= apply_fn({'params': params}, jnp.expand_dims(x[5],axis=0))
+        #a= apply_fn({'params': params}, jnp.expand_dims(x[5],axis=0))s
         #sampler = FSSC(n_core, hamiltonian.n_elec_a, hamiltonian.n_elec_b, num_orbitals)
         sample = sampler.next_sample(last_sample, params, apply_fn)
         
-        Norm = jnp.linalg.norm(sample[1])
+        Norm = jnp.linalg.norm(sample[1]) #[:sampler.n_core]
         # x_connected,C_i_connected=[],[]
         
         def find_Ci(det):
@@ -151,10 +155,11 @@ def train_step_fssc(state, last_sample, Hamiltonain, sampler):
         return loss
 
     grads = jax.grad(loss_fn)(state.params)
-    state = state.apply_gradients(grads=grads)
     loss, new_sample = hamiltonian_loss(state.params, state.apply_fn, last_sample, Hamiltonain, sampler)
+    
+    state = state.apply_gradients(grads=grads)
     return state, loss, new_sample
 
 def create_train_state(rng, model, variables):
-    tx = optax.adam(learning_rate=0.1)
+    tx = optax.adam(learning_rate=0.001)
     return train_state.TrainState.create(apply_fn=model.apply, params=variables['params'], tx=tx)

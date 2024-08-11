@@ -3,6 +3,7 @@ from jax import random
 import numpy as np
 import pyscf
 import jax
+from scipy.special import comb
 
 from tcnqs.fcidump import read_2_spin_orbital_seprated as read2
 from tcnqs.utils import generate_ci_data, build_ham_from_pyscf
@@ -214,10 +215,20 @@ def test_backflow_fssc(mol, random_key , num_epochs=2400, test=False):
     #batch_size = num_samples
     train_losses_bf = []
     #nwf = jax.jit(trainer.train_step_connections)
-    n_core = 15
-    sampler = FSSC(n_core, hamiltonian.n_elec_a, hamiltonian.n_elec_b, num_orbitals)
-    sample = sampler.initialize(state_bf)
+    n_core = 20
+    num_s_orb = int(hamiltonian.n_orb/2)
+    totals_dets = comb(num_s_orb, hamiltonian.n_elec_a,exact=True)*comb(num_s_orb, hamiltonian.n_elec_b ,exact=True)
+    # n_full_space = n_core*(comb(hamiltonian.n_elec_a,2, exact=True)*
+    #                      comb(num_s_orb-hamiltonian.n_elec_a,2,exact=True)*
+    #                      comb(num_s_orb-hamiltonian.n_elec_b,2,exact=True)*
+    #                      comb(hamiltonian.n_elec_b,2,exact=True))
     
+    n_connected =  jnp.minimum(totals_dets,n_core*505)
+    
+    sampler = FSSC(n_core, n_connected ,hamiltonian.n_elec_a, hamiltonian.n_elec_b, num_orbitals)
+    sample = sampler.initialize(state_bf)
+    relevant_indices = jnp.where(jnp.logical_not(jnp.all(sample[0]==jnp.zeros(num_orbitals),axis=1)))[0]
+    sample =(sample[0][relevant_indices],sample[1][relevant_indices]) 
     
     for epoch in range(num_epochs):
         epoch_loss_bf = 0.0
@@ -242,7 +253,7 @@ def test_backflow_fssc(mol, random_key , num_epochs=2400, test=False):
 
 if __name__ == '__main__':
     mol = pyscf.M(
-    atom = 'H 0 0 0; H 0 0 1.0 ; H 0 0 3.0; H 0 0 4' , # H 0 0 3.0; H 0 0 4.0  
+    atom = 'N 0 0 0; N 0 0 1.0 ; ',# H 0 0 2.0;  H 0 0 4' , # H 0 0 3.0; H 0 0 4.0  
     basis = 'sto-3g',
     spin = 0,
     charge = 0,
