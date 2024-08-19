@@ -10,6 +10,7 @@ from functools import partial
 
 from tcnqs.sampler.connected_dets import generate_connected_space
 ## using float 64 for the determinant to solve the bug temporarily
+jax.config.update("jax_enable_x64", True)
 class Backflow(nn.Module):
 
     num_orbital: int
@@ -28,10 +29,10 @@ class Backflow(nn.Module):
         }[self.activation]
 
         self.hidden_dense = [nn.Dense(
-            features=size, kernel_init=positive_random_init
+            features=size, kernel_init=positive_random_init, dtype=jnp.float64
             ) for size in self.hidden_layer_sizes]
         self.dense_general = nn.DenseGeneral(
-            features=(self.num_orbital, self.num_electron)
+            features=(self.num_orbital, self.num_electron), dtype=jnp.float64
             )
         
         
@@ -47,19 +48,22 @@ class Backflow(nn.Module):
         # jax.debug.breakpoint()
         x = self.dense_general(x)
         x = x[selected_config , :]
-        x = jnp.linalg.det(x)
+        #x = jnp.linalg.det(x)
         
         ### Slogdet is not a good option as the sgn it provides is discontinous
         ### This creats a problem in the gradient calculation 
-        
-        #sgn, val = jnp.linalg.slogdet(x)
-        #return x 
-        #x = sgn * jnp.exp(val)
+        sgn, val = jnp.linalg.slogdet(x)
+
+        # trim away inf values in val and replace them with 0
+        val = jnp.where(jnp.isinf(val), 0, val)
+        #logmax = jnp.max(val)
+        x = sgn * jnp.exp(val)
+        #print(x)
         # jax.debug.breakpoint()
         return jax.lax.cond(jnp.sum(selected_config)==0, lambda : (0.0),lambda : jnp.float64(x))
     
-def positive_random_init(key, shape, dtype=jnp.float32):
-    return random.uniform(key, shape, dtype, minval=0, maxval=0.2)
+def positive_random_init(key, shape, dtype=jnp.float64):
+    return random.uniform(key, shape, dtype, minval=0.1, maxval=0.5)
 
 def create_model(rng, input_shape, num_electrons, hidden_layer_sizes=[4],    
                  activation='relu'): 

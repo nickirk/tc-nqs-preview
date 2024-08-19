@@ -155,6 +155,8 @@ def train_step_fssc(state, last_sample, Hamiltonain, sampler):
         return loss
 
     grads = jax.grad(loss_fn)(state.params)
+    # put nan to 0
+    grads = jax.tree_map(lambda x: jnp.where(jnp.isnan(x), 0., x), grads)
     loss, new_sample = hamiltonian_loss(state.params, state.apply_fn, last_sample, Hamiltonain, sampler)
     
     state = state.apply_gradients(grads=grads)
