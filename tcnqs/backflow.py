@@ -40,24 +40,47 @@ class Backflow(nn.Module):
     def __call__(self, x):
         
         selected_config = jnp.nonzero(x, size=self.num_electron)[0]
-        #def neural_process(x):
+        
         for dense_layer in self.hidden_dense:
             x = dense_layer(x)
             x = self.activation_fn(x)
         # jax.debug.breakpoint()
         x = self.dense_general(x)
         x = x[selected_config , :]
-        x = jnp.linalg.det(x)
+        #x = jnp.sum(x)
         
         ### Slogdet is not a good option as the sgn it provides is discontinous
         ### This creats a problem in the gradient calculation 
-        
+        x = jnp.linalg.det(x)
         #sgn, val = jnp.linalg.slogdet(x)
-        #return x 
-        #x = sgn * jnp.exp(val)
+        # x = sgn * jnp.exp(val)
+        # x = jax.lax.select(val>-5,jnp.float64(sgn * jnp.exp(val)),0.0)
+        # return jnp.float64(x) 
+
+        
         # jax.debug.breakpoint()
-        return jax.lax.cond(jnp.sum(selected_config)==0, lambda : (0.0),lambda : jnp.float64(x))
-    
+        return jax.lax.cond(jnp.sum(selected_config)==0, lambda : 0.0,lambda : jnp.float64(x))
+    def zero(x):
+        return 0.0
+
+    def neural_process(x):
+        for dense_layer in self.hidden_dense:
+            x = dense_layer(x)
+            x = self.activation_fn(x)
+        # jax.debug.breakpoint()
+        x = self.dense_general(x)
+        x = x[selected_config , :]
+        #x = jnp.sum(x)
+        
+        ### Slogdet is not a good option as the sgn it provides is discontinous
+        ### This creats a problem in the gradient calculation 
+        x = jnp.linalg.det(x)
+        #sgn, val = jnp.linalg.slogdet(x)
+        # x = sgn * jnp.exp(val)
+        # x = jax.lax.select(val>-5,jnp.float64(sgn * jnp.exp(val)),0.0)
+        return jnp.float64(x) 
+
+
 def positive_random_init(key, shape, dtype=jnp.float32):
     return random.uniform(key, shape, dtype, minval=0, maxval=0.2)
 

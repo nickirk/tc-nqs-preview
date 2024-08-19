@@ -161,5 +161,5 @@ def train_step_fssc(state, last_sample, Hamiltonain, sampler):
     return state, loss, new_sample
 
 def create_train_state(rng, model, variables):
-    tx = optax.adam(learning_rate=0.001)
+    tx = optax.adam(learning_rate=0.01)
     return train_state.TrainState.create(apply_fn=model.apply, params=variables['params'], tx=tx)

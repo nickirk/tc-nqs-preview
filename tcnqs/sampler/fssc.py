@@ -5,6 +5,7 @@ from tcnqs.hamiltonian import Hamiltonian
 from tcnqs.slater_det import SD
 from functools import partial
 from tcnqs.sampler.connected_dets import generate_connected_space
+import time
 
 class FSSC(Sampler):
     def __init__(self, n_core, n_connected ,n_elec_a, n_elec_b,n_spac_orb) -> None:
@@ -50,20 +51,24 @@ class FSSC(Sampler):
         return (full_space, state.apply_fn({'params': state.params}, full_space))
             
         
-    #@partial(jax.jit, static_argnums=(0,3))    
+    @partial(jax.jit, static_argnums=(0,3))    
     def next_sample(self, last_sample, params, apply_fn) -> jnp.ndarray:   #input: state instead of params,last_sample
         last_slater_determinants = last_sample[0]
         preds = apply_fn({'params': params}, last_slater_determinants)
         #jax.debug.breakpoint()
         # Reorder Ci and slater_determinants in decreasing order of mod of Ci
-        sorted_indices = jnp.argsort(jnp.abs(preds))[::-1]
+
+        connected_space = jnp.empty((self.n_connected,self.n_spac_orb))
+
+        sorted_indices = jnp.argsort(jnp.abs(preds),descending =True)
+        
         preds = preds[sorted_indices]
         last_slater_determinants = last_slater_determinants[sorted_indices]
         
         core_space = last_slater_determinants[:self.n_core]
         # full_connected_space = jax.vmap(generate_connected_space, in_axes=(0, None, None))(core_space, self.n_elec_a, self.n_elec_b)
         connected_space = self._sample_connected(core_space)
-        
+        #full_space = jnp.empty((self.n_core+self.n_connected,self.n_spac_orb))
         full_space = jnp.concatenate((core_space, connected_space)) 
         # relevant_indices = jnp.where(jnp.logical_not(jnp.all(full_space==jnp.zeros(self.n_spac_orb),axis=1)))[0]
         # full_space = full_space[relevant_indices]
@@ -127,11 +132,14 @@ class FSSC(Sampler):
         #     determinants_to_append = self.find_sd_in_space(single_sd_connected_space, core, connected)
         #     connected = jnp.concatenate((connected, determinants_to_append))
         
+        #start = jnp.array(time.time())
         connected = jax.vmap(generate_connected_space,in_axes=(0,None,None))(core, self.n_elec_a, self.n_elec_b)[1:]
         connected = jnp.reshape(connected,(-1, self.n_spac_orb))
         connected = jnp.unique(connected, size = self.n_connected ,axis=0,fill_value=jnp.zeros(self.n_spac_orb))
         connected = self.remove_core_elements(connected,core)
-        #connected = connected.reshape(-1, self.n_core)   
-        #connected = connected.reshape(-1, self.n_core)
         
+        #end = jnp.array(time.time())
+
+        #jax.debug.print("Elapsed time: {time} seconds", time=end-start)
+
         return connected

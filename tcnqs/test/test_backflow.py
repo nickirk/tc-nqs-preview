@@ -180,7 +180,7 @@ def test_backflow_connected(mol, random_key , num_epochs=2400, test=False):
     
     return train_losses_bf, fci_e_pyscf
 
-def test_backflow_fssc(mol, random_key , num_epochs=2400, test=False):
+def test_backflow_fssc(mol, random_key , num_epochs=2400, test=False, n_core=20):
     if test:
         jax.config.update("jax_enable_x64", True)
     
@@ -208,14 +208,14 @@ def test_backflow_fssc(mol, random_key , num_epochs=2400, test=False):
 
     model_bf, variables_bf = bf.create_model(rng, input_shape = num_orbitals, 
                                             num_electrons= hamiltonian.n_elec,
-                                            hidden_layer_sizes=[], activation='tanh')
+                                            hidden_layer_sizes=[2], activation='tanh')
     state_bf = trainer.create_train_state(rng, model_bf, variables_bf)
     
     # num_epochs = 400
     #batch_size = num_samples
     train_losses_bf = []
     #nwf = jax.jit(trainer.train_step_connections)
-    n_core = 20
+    #n_core = 20
     num_s_orb = int(hamiltonian.n_orb/2)
     totals_dets = comb(num_s_orb, hamiltonian.n_elec_a,exact=True)*comb(num_s_orb, hamiltonian.n_elec_b ,exact=True)
     # n_full_space = n_core*(comb(hamiltonian.n_elec_a,2, exact=True)*
@@ -223,7 +223,7 @@ def test_backflow_fssc(mol, random_key , num_epochs=2400, test=False):
     #                      comb(num_s_orb-hamiltonian.n_elec_b,2,exact=True)*
     #                      comb(hamiltonian.n_elec_b,2,exact=True))
     
-    n_connected =  jnp.minimum(totals_dets,n_core*505)
+    n_connected =  jnp.minimum(totals_dets,n_core*186)
     
     sampler = FSSC(n_core, n_connected ,hamiltonian.n_elec_a, hamiltonian.n_elec_b, num_orbitals)
     sample = sampler.initialize(state_bf)
@@ -253,14 +253,16 @@ def test_backflow_fssc(mol, random_key , num_epochs=2400, test=False):
 
 if __name__ == '__main__':
     mol = pyscf.M(
-    atom = 'N 0 0 0; N 0 0 1.0 ; ',# H 0 0 2.0;  H 0 0 4' , # H 0 0 3.0; H 0 0 4.0  
+    atom = 'Li 0 0 0; H 0 0 1.0 ;',#  H 0 0 3.0;  H 0 0 4.0 , # H 0 0 3.0; H 0 0 4.0  
     basis = 'sto-3g',
     spin = 0,
     charge = 0,
     symmetry = False
     )
-
+    print(jax.devices())
+    
     # test_backflow_supervised(mol, 0)
     #test_backflow_unsupervised(mol,17, test=True)
     #test_backflow_connected(mol, 17, )#test= True)
-    test_backflow_fssc(mol, 17, test= True)
+
+    test_backflow_fssc(mol, 17, test= True, n_core=10, num_epochs=200)

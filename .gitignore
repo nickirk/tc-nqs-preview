@@ -1,5 +1,5 @@
 # Local notes
-tc-nqs.ipynb
+*.ipynb
 
 *.pkl
 # Byte-compiled / optimized / DLL files
@@ -127,6 +127,7 @@ celerybeat.pid
 .env
 .venv
 .vscode
+.venvjax
 env/
 venv/
 ENV/
