@@ -10,6 +10,7 @@ from functools import partial
 
 from tcnqs.sampler.connected_dets import generate_connected_space
 ## using float 64 for the determinant to solve the bug temporarily
+jax.config.update("jax_enable_x64", True)
 class Backflow(nn.Module):
 
     num_orbital: int
@@ -28,10 +29,10 @@ class Backflow(nn.Module):
         }[self.activation]
 
         self.hidden_dense = [nn.Dense(
-            features=size, kernel_init=positive_random_init
+            features=size, kernel_init=positive_random_init, dtype=jnp.float64
             ) for size in self.hidden_layer_sizes]
         self.dense_general = nn.DenseGeneral(
-            features=(self.num_orbital, self.num_electron)
+            features=(self.num_orbital, self.num_electron), dtype=jnp.float64
             )
         
         
@@ -47,26 +48,17 @@ class Backflow(nn.Module):
         # jax.debug.breakpoint()
         x = self.dense_general(x)
         x = x[selected_config , :]
-        #x = jnp.sum(x)
+        ##x = jnp.sum(x)
         
         ### Slogdet is not a good option as the sgn it provides is discontinous
         ### This creats a problem in the gradient calculation 
-        x = jnp.linalg.det(x)
-        #sgn, val = jnp.linalg.slogdet(x)
-        # x = sgn * jnp.exp(val)
-        # x = jax.lax.select(val>-5,jnp.float64(sgn * jnp.exp(val)),0.0)
-        # return jnp.float64(x) 
+        sgn, val = jnp.linalg.slogdet(x)
 
-        
-        # jax.debug.breakpoint()
-        return jax.lax.cond(jnp.sum(selected_config)==0, lambda : 0.0,lambda : jnp.float64(x))
-    def zero(x):
-        return 0.0
-
-    def neural_process(x):
-        for dense_layer in self.hidden_dense:
-            x = dense_layer(x)
-            x = self.activation_fn(x)
+        # trim away inf values in val and replace them with 0
+        val = jnp.where(jnp.isinf(val), 0, val)
+        #logmax = jnp.max(val)
+        x = sgn * jnp.exp(val)
+        #print(x)
         # jax.debug.breakpoint()
         x = self.dense_general(x)
         x = x[selected_config , :]
