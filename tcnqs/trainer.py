@@ -109,7 +109,7 @@ def train_step_connections(state, batch, Hamiltonain):
     state = state.apply_gradients(grads=grads)
     return state, loss_fn(state.params)
 
-@partial(jax.jit, static_argnums=(2,3))
+#@partial(jax.jit, static_argnums=(2,3))
 def train_step_fssc(state, last_sample, Hamiltonain, sampler):
     """
     Parameters

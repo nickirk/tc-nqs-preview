@@ -181,7 +181,7 @@ def test_backflow_connected(mol, random_key , num_epochs=2400, test=False):
     
     return train_losses_bf, fci_e_pyscf
 
-def test_backflow_fssc(mol, random_key , num_epochs=2400, test=False, n_core=20):
+def test_backflow_fssc(mol,n_core,num_epochs=2400, test=False ,random_key=17 ):
     if test:
         jax.config.update("jax_enable_x64", True)
     
@@ -218,13 +218,16 @@ def test_backflow_fssc(mol, random_key , num_epochs=2400, test=False, n_core=20)
     #nwf = jax.jit(trainer.train_step_connections)
     #n_core = 20
     num_s_orb = int(hamiltonian.n_orb/2)
-    totals_dets = comb(num_s_orb, hamiltonian.n_elec_a,exact=True)*comb(num_s_orb, hamiltonian.n_elec_b ,exact=True)
-    # n_full_space = n_core*(comb(hamiltonian.n_elec_a,2, exact=True)*
-    #                      comb(num_s_orb-hamiltonian.n_elec_a,2,exact=True)*
-    #                      comb(num_s_orb-hamiltonian.n_elec_b,2,exact=True)*
-    #                      comb(hamiltonian.n_elec_b,2,exact=True))
+    n_totals_dets = comb(num_s_orb, hamiltonian.n_elec_a,exact=True)*comb(num_s_orb, hamiltonian.n_elec_b ,exact=True)
     
-    n_connected =  jnp.minimum(totals_dets,n_core*186)
+    if n_core > totals_dets:
+        n_core = n_totals_dets
+        raise Warning(f"n_core specified is greater than total determinants in hilbert space. Falling back to n_core ={n_totals_dets}")
+
+    max_n_full= n_core*(1 + comb(self.n_elec_a,2, exact=True)*comb(n_s_orb-self.n_elec_a,2,exact=True)+comb(self.n_elec_b,2, exact=True)*comb(n_s_orb-self.n_elec_b,2,exact=True)
+                    + self.n_elec_a*self.n_elec_b*(n_s_orb-self.n_elec_a)*(n_s_orb-self.n_elec_b) + n_s_orb*(self.n_elec_a+self.n_elec_b)- self.n_elec_a**2 - self.n_elec_b**2) 
+    
+    n_connected =  jnp.minimum(n_totals_dets, max_n_connected) - n_core
     
     sampler = FSSC(n_core, n_connected ,hamiltonian.n_elec_a, hamiltonian.n_elec_b, num_orbitals)
     sample = sampler.initialize(state_bf)
@@ -254,7 +257,7 @@ def test_backflow_fssc(mol, random_key , num_epochs=2400, test=False, n_core=20)
 
 if __name__ == '__main__':
     mol = pyscf.M(
-    atom = 'Li 0 0 0; H 0 0 1.0 ;',#  H 0 0 3.0;  H 0 0 4.0 , # H 0 0 3.0; H 0 0 4.0  
+    atom = 'H 0 0 0; H 0 0 1.0 ;',#  H 0 0 3.0;  H 0 0 4.0 , # H 0 0 3.0; H 0 0 4.0  
     basis = 'sto-3g',
     spin = 0,
     charge = 0,
@@ -266,4 +269,4 @@ if __name__ == '__main__':
     #test_backflow_unsupervised(mol,17, test=True)
     #test_backflow_connected(mol, 17, )#test= True)
 
-    test_backflow_fssc(mol, 17, test= True, n_core=10, num_epochs=200)
+    test_backflow_fssc(mol,n_core=4, test= True, random_key=17, num_epochs=200)
