@@ -1,5 +1,5 @@
 # Local notes
-/notes/*.ipynb
+notes/*.ipynb
 
 *.pkl
 # Byte-compiled / optimized / DLL files
