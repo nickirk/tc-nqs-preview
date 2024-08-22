@@ -11,6 +11,7 @@ from tcnqs.utils import generate_ci_data, build_ham_from_pyscf
 import tcnqs.backflow as bf
 import tcnqs.trainer as trainer
 from tcnqs.sampler.fssc import FSSC
+import tcnqs.test.test_parameters as t
 
 def test_backflow_supervised(mol, random_key):
     myhf = mol.RHF().run()
@@ -200,7 +201,7 @@ def test_backflow_fssc(mol,n_core,num_epochs=2400, test=False ,random_key=17 ):
 
     model_bf, variables_bf = bf.create_model(rng, input_shape = num_orbitals, 
                                             num_electrons= hamiltonian.n_elec,
-                                            hidden_layer_sizes=[2], activation='tanh')
+                                            hidden_layer_sizes=t.hidden_layer_sizes, activation='tanh')
     state_bf = trainer.create_train_state(rng, model_bf, variables_bf)
     
 
@@ -246,8 +247,8 @@ def test_backflow_fssc(mol,n_core,num_epochs=2400, test=False ,random_key=17 ):
 
 if __name__ == '__main__':
     mol = pyscf.M(
-    atom = 'Li 0 0 0; H 0 0 1.0 ;',#  H 0 0 3.0;  H 0 0 4.0 , # H 0 0 3.0; H 0 0 4.0  
-    basis = 'sto-3g',
+    atom = t.atom,
+    basis = t.basis,
     spin = 0,
     charge = 0,
     symmetry = False
@@ -258,4 +259,4 @@ if __name__ == '__main__':
     #test_backflow_unsupervised(mol,17, test=True)
     #test_backflow_connected(mol, 17, )#test= True)
 
-    test_backflow_fssc(mol,n_core=30, test= True, random_key=17, num_epochs=2400)
+    test_backflow_fssc(mol,n_core=t.n_core, test= True, random_key=17, num_epochs=t.num_epochs)

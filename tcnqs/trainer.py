@@ -7,6 +7,7 @@ from flax.training import train_state
 from functools import partial
 from tcnqs.sampler.connected_dets import generate_connected_space
 from tcnqs.sampler.fssc import FSSC
+from tcnqs.test.test_parameters import learning_rate 
 
 @jax.jit
 def train_step(state, batch):
@@ -166,5 +167,5 @@ def train_step_fssc(state, last_sample, Hamiltonain, sampler):
     return state, loss, new_sample
 
 def create_train_state(rng, model, variables):
-    tx = optax.adam(learning_rate=0.01)
+    tx = optax.adam(learning_rate = learning_rate)
     return train_state.TrainState.create(apply_fn=model.apply, params=variables['params'], tx=tx)

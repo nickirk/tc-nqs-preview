@@ -43,10 +43,10 @@ class FSSC(Sampler):
         # Following 2 lines generates new elemets for core space from the cisd space 
         # and then remove the elements that are  already present in cisd space and extra padding
         core_space = self._vmap_generate_connected_space(cisd_space)
-        core_space= jnp.reshape(core_space,(-1, self.n_spac_orb))
+        core_space = jnp.reshape(core_space,(-1, self.n_spac_orb))
         core_space = self._remove_core_elements(core_space,cisd_space)
         core_space = self._remove_excess_padding(core_space)
-
+        core_space = jnp.unique(core_space,axis=0,size=self.n_core-num_cisd)
         core_space = jnp.concatenate((cisd_space,core_space))[:self.n_core]
         # core_space = jnp.unique(core_space, size = self.n_core ,axis=0,fill_value=jnp.zeros(self.n_spac_orb))
         

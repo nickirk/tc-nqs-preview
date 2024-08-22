@@ -54,7 +54,7 @@ class Backflow(nn.Module):
         ### This creats a problem in the gradient calculation 
         sgn, val = jnp.linalg.slogdet(x)
         x = sgn * jnp.exp(val)
-        # x = jnp.linalg.det(x)
+        #x = jnp.linalg.det(x)
 
         # trim away inf values in val and replace them with 0
         # val = jnp.where(jnp.isinf(val), 0, val)
