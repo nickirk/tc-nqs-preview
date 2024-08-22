@@ -53,11 +53,13 @@ class Backflow(nn.Module):
         ### Slogdet is not a good option as the sgn it provides is discontinous
         ### This creats a problem in the gradient calculation 
         sgn, val = jnp.linalg.slogdet(x)
-
-        # trim away inf values in val and replace them with 0
-        val = jnp.where(jnp.isinf(val), 0, val)
-        #logmax = jnp.max(val)
         x = sgn * jnp.exp(val)
+        # x = jnp.linalg.det(x)
+        
+        # trim away inf values in val and replace them with 0
+        # val = jnp.where(jnp.isinf(val), 0, val)
+        #logmax = jnp.max(val)
+        
         #print(x)
         # jax.debug.breakpoint()
         #x = self.dense_general(x)
@@ -66,7 +68,7 @@ class Backflow(nn.Module):
         
         ### Slogdet is not a good option as the sgn it provides is discontinous
         ### This creats a problem in the gradient calculation 
-        #x = jnp.linalg.det(x)
+        
         #sgn, val = jnp.linalg.slogdet(x)
         # x = sgn * jnp.exp(val)
         # x = jax.lax.select(val>-5,jnp.float64(sgn * jnp.exp(val)),0.0)

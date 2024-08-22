@@ -9,19 +9,22 @@ from tcnqs.sampler.connected_dets import generate_connected_space
 import time
 
 class FSSC(Sampler):
-    def __init__(self, n_core, n_connected ,n_elec_a, n_elec_b,n_spac_orb) -> None:
+    def __init__(self, n_core, n_connected ,n_elec_a, n_elec_b, n_spac_orb, model_apply) -> None:
         # super().__init__(wfn)
         # self.wfn = apply_fn
+        self.wfn_apply = model_apply
         self.n_core = n_core
         self.n_connected = n_connected
+        self.n_full = n_core + n_connected
         self.n_elec_a = n_elec_a
         self.n_elec_b = n_elec_b
         self.n_spac_orb = n_spac_orb
         #self.n_connected = n_connected
     
-    
+    # Dont jit: dynamic methods involved
+    # Jit doesnt give any real advantage as the function is called only once!
     #@partial(jax.jit, static_argnums=(0))    
-    def initialize(self, state) -> tuple[jnp.ndarray, jnp.ndarray]:
+    def initialize(self, params) -> tuple[jnp.ndarray, jnp.ndarray]:
         alpha = jnp.concatenate((jnp.ones(self.n_elec_a),jnp.zeros(int(self.n_spac_orb/2)-self.n_elec_a)), dtype=jnp.uint8)
         beta = jnp.concatenate((jnp.ones(self.n_elec_b),jnp.zeros(int(self.n_spac_orb/2)-self.n_elec_b)), dtype=jnp.uint8)
         hartree_fock = jnp.concatenate((alpha,beta))
@@ -35,13 +38,14 @@ class FSSC(Sampler):
         ## 3 is arbitary here ## Approx number of samples to take
         approx_number = 3*int(jnp.ceil(self.n_core/num_cisd))
 
-        
-        core_space = jnp.empty((0, self.n_spac_orb), dtype=jnp.uint8)
+        padding = jnp.zeros(self.n_spac_orb)
+        # core_space = jnp.empty((self.n_core, self.n_spac_orb), dtype=jnp.uint8)
         # Following 2 lines generates new elemets for core space from the cisd space 
-        # and then remove the elements that are  already present in cisd space 
+        # and then remove the elements that are  already present in cisd space and extra padding
         core_space = self._vmap_generate_connected_space(cisd_space)
         core_space= jnp.reshape(core_space,(-1, self.n_spac_orb))
         core_space = self._remove_core_elements(core_space,cisd_space)
+        core_space = self._remove_excess_padding(core_space)
 
         core_space = jnp.concatenate((cisd_space,core_space))[:self.n_core]
         # core_space = jnp.unique(core_space, size = self.n_core ,axis=0,fill_value=jnp.zeros(self.n_spac_orb))
@@ -50,22 +54,22 @@ class FSSC(Sampler):
         connected_space = self._sample_connected(core_space)
         full_space = jnp.concatenate((core_space, connected_space))
 
-        padding = jnp.zeros(self.n_spac_orb)
-        relevant_indices = jnp.where(jnp.logical_not(jnp.all(full_space==padding,axis=1)))[0]
-        full_space =full_space[relevant_indices]
         
-        return (full_space, state.apply_fn({'params': state.params}, full_space))
+        # relevant_indices = jnp.where(jnp.logical_not(jnp.all(full_space==padding,axis=1)))[0]
+        # full_space =full_space[relevant_indices]
+
+        return (full_space, self.wfn_apply({'params': params}, full_space))
             
         
-    @partial(jax.jit, static_argnums=(0,3))    
-    def next_sample(self, last_sample, params, apply_fn) -> jnp.ndarray:   #input: state instead of params,last_sample
+    @partial(jax.jit, static_argnums=(0))    
+    def next_sample(self, last_sample, params) -> jnp.ndarray:   #input: state instead of params,last_sample
         sorted_indices = jnp.argsort(jnp.abs(last_sample[1]),descending =True)
-        core_space = last_sample[sorted_indices][:self.n_core]
+        core_space = last_sample[0][sorted_indices][:self.n_core]
         
         connected_space = jnp.empty((self.n_connected,self.n_spac_orb))   
         connected_space = self._sample_connected(core_space)
         full_space = jnp.concatenate((core_space, connected_space)) 
-        return (jnp.asarray(full_space,dtype=jnp.uint8), jnp.asarray(apply_fn({'params': params},(full_space)),jnp.float64))
+        return (jnp.asarray(full_space,dtype=jnp.uint8), jnp.asarray(self.wfn_apply({'params': params},(full_space)),jnp.float64))
        
     
     @partial(jax.vmap, in_axes=(None, 0, None))    
@@ -78,26 +82,32 @@ class FSSC(Sampler):
         return jax.lax.cond(condition, lambda : det, lambda : jnp.zeros(self.n_spac_orb, dtype=jnp.uint8))
         #return jnp.any(condition)
        
-    
-    ## Can be more efficient    
+      
     def _sample_connected(self, core: jnp.ndarray) -> jnp.ndarray:
-        connected = jnp.empty((0,self.n_spac_orb), dtype=jnp.uint8)
+        connected_space = jnp.empty((self.n_connected,self.n_spac_orb), dtype=jnp.uint8)
         #start = jnp.array(time.time())
         connected = self._vmap_generate_connected_space(core)
         connected = jnp.reshape(connected,(-1, self.n_spac_orb))
-        connected = jnp.unique(connected, size = self.n_connected ,axis=0,fill_value=jnp.zeros(self.n_spac_orb))
+        
+        connected = jnp.unique(connected, size = self.n_full ,axis=0,fill_value=jnp.zeros(self.n_spac_orb))
         connected = self._remove_core_elements(connected,core)
+        connected_space = self._remove_excess_padding(connected,size=self.n_connected)
         
         #end = jnp.array(time.time())
 
         #jax.debug.print("Elapsed time: {time} seconds", time=end-start)
 
-        return connected
+        return connected_space
 
     @partial(jax.vmap,in_axes=(None,0))
     def _vmap_generate_connected_space(self,sd):
         return generate_connected_space(sd, self.n_elec_a, self.n_elec_b)[1:]
-
+ 
+    def _remove_excess_padding(self, sd_space, size=None):
+        padding = jnp.zeros(self.n_spac_orb)
+        relevant_indices = jnp.where(jnp.logical_not(jnp.all(sd_space==padding,axis=1)),size=size)[0]
+        sd_space = sd_space[relevant_indices]
+        return sd_space
 
 ## Deprecated Methods: Can be useful in the future
  # @partial(jax.vmap, in_axes=(0))

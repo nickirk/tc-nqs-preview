@@ -186,60 +186,51 @@ def test_backflow_fssc(mol,n_core,num_epochs=2400, test=False ,random_key=17 ):
         jax.config.update("jax_enable_x64", True)
     
     rng = random.PRNGKey(random_key)
-    
     myhf = mol.RHF().run()
     cisolver = pyscf.fci.FCI(myhf)
     fci_e_pyscf, ci_vector=cisolver.kernel()
     cisolver = pyscf.fci.FCI(myhf)
     print("E FCI = ", fci_e_pyscf)
-    
-    
-    #fcidump_file = 'tcnqs/test/dataset_fcidump/fcidump'
-    # Create FCI Hamiltonian
+ 
     hamiltonian = build_ham_from_pyscf(mol, myhf)
     
-    # x_train, y_train = generate_ci_data(hamiltonian.n_orb//2, hamiltonian.n_elec_a, 
-    #                                     hamiltonian.n_elec_b, ci_vector)
-    # x_train = jnp.asarray(x_train,dtype=jnp.uint8)[:15]
-    # hamiltonian , ecore = test_hamiltonian(mol)
-
     
     num_orbitals = hamiltonian.n_orb
-    # num_samples = len(y_train) 
+
 
     model_bf, variables_bf = bf.create_model(rng, input_shape = num_orbitals, 
                                             num_electrons= hamiltonian.n_elec,
                                             hidden_layer_sizes=[2], activation='tanh')
     state_bf = trainer.create_train_state(rng, model_bf, variables_bf)
     
-    # num_epochs = 400
-    #batch_size = num_samples
-    train_losses_bf = []
-    #nwf = jax.jit(trainer.train_step_connections)
-    #n_core = 20
-    num_s_orb = int(hamiltonian.n_orb/2)
-    n_totals_dets = comb(num_s_orb, hamiltonian.n_elec_a,exact=True)*comb(num_s_orb, hamiltonian.n_elec_b ,exact=True)
-    
-    if n_core > totals_dets:
-        n_core = n_totals_dets
-        raise Warning(f"n_core specified is greater than total determinants in hilbert space. Falling back to n_core ={n_totals_dets}")
 
-    max_n_full= n_core*(1 + comb(self.n_elec_a,2, exact=True)*comb(n_s_orb-self.n_elec_a,2,exact=True)+comb(self.n_elec_b,2, exact=True)*comb(n_s_orb-self.n_elec_b,2,exact=True)
-                    + self.n_elec_a*self.n_elec_b*(n_s_orb-self.n_elec_a)*(n_s_orb-self.n_elec_b) + n_s_orb*(self.n_elec_a+self.n_elec_b)- self.n_elec_a**2 - self.n_elec_b**2) 
+    train_losses_bf = []
+
+    n_s_orb = (hamiltonian.n_orb//2)
+    n_total_dets = comb(n_s_orb, hamiltonian.n_elec_a,exact=True)*comb(n_s_orb, hamiltonian.n_elec_b ,exact=True)
     
-    n_connected =  jnp.minimum(n_totals_dets, max_n_connected) - n_core
+    if n_core > n_total_dets:
+        n_core = n_total_dets
+        print(f"Warning: n_core specified is greater than total determinants in hilbert space. Falling back to n_core ={n_total_dets}")
+
+    max_n_full= n_core*(1 + comb(hamiltonian.n_elec_a,2, exact=True)*
+                        comb(n_s_orb-hamiltonian.n_elec_a,2,exact=True)+comb(hamiltonian.n_elec_b,2, 
+                        exact=True)*comb(n_s_orb-hamiltonian.n_elec_b,2,exact=True)
+                        + hamiltonian.n_elec_a*hamiltonian.n_elec_b*(n_s_orb-hamiltonian.n_elec_a)
+                        *(n_s_orb-hamiltonian.n_elec_b) + n_s_orb*(hamiltonian.n_elec_a+hamiltonian.n_elec_b)
+                        - hamiltonian.n_elec_a**2 - hamiltonian.n_elec_b**2) 
     
-    sampler = FSSC(n_core, n_connected ,hamiltonian.n_elec_a, hamiltonian.n_elec_b, num_orbitals)
-    sample = sampler.initialize(state_bf)
-    relevant_indices = jnp.where(jnp.logical_not(jnp.all(sample[0]==jnp.zeros(num_orbitals),axis=1)))[0]
-    sample =(sample[0][relevant_indices],sample[1][relevant_indices]) 
+    n_connected =  jnp.minimum(n_total_dets, max_n_full) - n_core
+    
+    sampler = FSSC(n_core, n_connected ,hamiltonian.n_elec_a, hamiltonian.n_elec_b, num_orbitals,state_bf.apply_fn)
+    sample = sampler.initialize(state_bf.params)
     
     for epoch in range(num_epochs):
         epoch_loss_bf = 0.0
         state_bf, loss_bf, sample = trainer.train_step_fssc(state_bf, sample, hamiltonian,sampler)
         
-        relevant_indices = jnp.where(jnp.logical_not(jnp.all(sample[0]==jnp.zeros(num_orbitals),axis=1)))[0]
-        sample =(sample[0][relevant_indices],sample[1][relevant_indices]) 
+        # relevant_indices = jnp.where(jnp.logical_not(jnp.all(sample[0]==jnp.zeros(num_orbitals),axis=1)))[0]
+        # sample =(sample[0][relevant_indices],sample[1][relevant_indices]) 
         
         
         epoch_loss_bf += loss_bf
@@ -248,7 +239,7 @@ def test_backflow_fssc(mol,n_core,num_epochs=2400, test=False ,random_key=17 ):
         
         print(f"Epoch {epoch+1} , Loss_bf: {average_epoch_loss_bf + hamiltonian.e_core}")
     
-    # print(FCI_e_pyscf, jnp.average(jnp.array(train_losses_bf[-50:],dtype=jnp.float32)))
+   
     if test:
         assert jnp.absolute(train_losses_bf[-1]-fci_e_pyscf) < 1e-3
         print("Success: Model trained successfully")
@@ -257,7 +248,7 @@ def test_backflow_fssc(mol,n_core,num_epochs=2400, test=False ,random_key=17 ):
 
 if __name__ == '__main__':
     mol = pyscf.M(
-    atom = 'H 0 0 0; H 0 0 1.0 ;',#  H 0 0 3.0;  H 0 0 4.0 , # H 0 0 3.0; H 0 0 4.0  
+    atom = 'Li 0 0 0; H 0 0 1.0 ;',#  H 0 0 3.0;  H 0 0 4.0 , # H 0 0 3.0; H 0 0 4.0  
     basis = 'sto-3g',
     spin = 0,
     charge = 0,
@@ -269,4 +260,4 @@ if __name__ == '__main__':
     #test_backflow_unsupervised(mol,17, test=True)
     #test_backflow_connected(mol, 17, )#test= True)
 
-    test_backflow_fssc(mol,n_core=4, test= True, random_key=17, num_epochs=200)
+    test_backflow_fssc(mol,n_core=30, test= True, random_key=17, num_epochs=2400)

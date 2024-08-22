@@ -109,7 +109,7 @@ def train_step_connections(state, batch, Hamiltonain):
     state = state.apply_gradients(grads=grads)
     return state, loss_fn(state.params)
 
-#@partial(jax.jit, static_argnums=(2,3))
+@partial(jax.jit, static_argnums=(2,3))
 def train_step_fssc(state, last_sample, Hamiltonain, sampler):
     """
     Parameters
@@ -123,12 +123,12 @@ def train_step_fssc(state, last_sample, Hamiltonain, sampler):
               ## or a general sampler depending on future implementations  
     """
     
-    def hamiltonian_loss(params, apply_fn, last_sample, Hamiltonain,sampler):
+    def hamiltonian_loss(params, last_sample, Hamiltonain,sampler):
         ## Sample is a tuple of x and C_i (x , C_i)
         # C_i = sample[1] 
         #a= apply_fn({'params': params}, jnp.expand_dims(x[5],axis=0))s
         #sampler = FSSC(n_core, hamiltonian.n_elec_a, hamiltonian.n_elec_b, num_orbitals)
-        sample = sampler.next_sample(last_sample, params, apply_fn)
+        sample = sampler.next_sample(last_sample, params)
         
         Norm = jnp.linalg.norm(sample[1]) #[:sampler.n_core]
         # x_connected,C_i_connected=[],[]
@@ -136,6 +136,10 @@ def train_step_fssc(state, last_sample, Hamiltonain, sampler):
         def find_Ci(det):
             condition=jnp.all(sample[0]==det,axis=1)
             return jnp.asarray(sample[1][jnp.where(condition, size = 1)[0][0]])
+            ## return jax.lax.cond(jnp.any , jnp.array , 0.0 )
+            # Edge case if condition is false everywhere the ci value returned is wrong*
+            # Use jax.lax.cond to solve it 
+            # Will be used when we select only particular samples
             
 
         def overlap(slater_determinant, C_i):
@@ -151,13 +155,13 @@ def train_step_fssc(state, last_sample, Hamiltonain, sampler):
         return overlap_coeff/Norm**2, sample
     
     def loss_fn(params):
-        loss , sample = hamiltonian_loss(params, state.apply_fn, last_sample, Hamiltonain, sampler)
+        loss , sample = hamiltonian_loss(params, last_sample, Hamiltonain, sampler)
         return loss
 
     grads = jax.grad(loss_fn)(state.params)
     # put nan to 0
-    grads = jax.tree_map(lambda x: jnp.where(jnp.isnan(x), 0., x), grads)
-    loss, new_sample = hamiltonian_loss(state.params, state.apply_fn, last_sample, Hamiltonain, sampler)
+    #grads = jax.tree_map(lambda x: jnp.where(jnp.isnan(x), 0., x), grads)
+    loss, new_sample = hamiltonian_loss(state.params, last_sample, Hamiltonain, sampler)
     
     state = state.apply_gradients(grads=grads)
     return state, loss, new_sample
