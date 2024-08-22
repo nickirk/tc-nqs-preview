@@ -55,7 +55,7 @@ class Backflow(nn.Module):
         sgn, val = jnp.linalg.slogdet(x)
         x = sgn * jnp.exp(val)
         # x = jnp.linalg.det(x)
-        
+
         # trim away inf values in val and replace them with 0
         # val = jnp.where(jnp.isinf(val), 0, val)
         #logmax = jnp.max(val)
@@ -74,7 +74,6 @@ class Backflow(nn.Module):
         # x = jax.lax.select(val>-5,jnp.float64(sgn * jnp.exp(val)),0.0)
 
         return jax.lax.cond(jnp.sum(selected_config)==0,lambda :0.0,lambda :jnp.float64(x))
-
 
 def positive_random_init(key, shape, dtype=jnp.float32):
     return random.uniform(key, shape, dtype, minval=0, maxval=0.2)

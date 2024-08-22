@@ -140,7 +140,6 @@ def train_step_fssc(state, last_sample, Hamiltonain, sampler):
             # Edge case if condition is false everywhere the ci value returned is wrong*
             # Use jax.lax.cond to solve it 
             # Will be used when we select only particular samples
-            
 
         def overlap(slater_determinant, C_i):
             connected_space = generate_connected_space(slater_determinant,Hamiltonain.n_elec_a, Hamiltonain.n_elec_b)

@@ -60,7 +60,7 @@ class FSSC(Sampler):
 
         return (full_space, self.wfn_apply({'params': params}, full_space))
             
-        
+     
     @partial(jax.jit, static_argnums=(0))    
     def next_sample(self, last_sample, params) -> jnp.ndarray:   #input: state instead of params,last_sample
         sorted_indices = jnp.argsort(jnp.abs(last_sample[1]),descending =True)
