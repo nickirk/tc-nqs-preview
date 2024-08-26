@@ -32,8 +32,9 @@ class Backflow(nn.Module):
             features=size, kernel_init=positive_random_init, dtype=jnp.float64
             ) for size in self.hidden_layer_sizes]
         self.dense_general = nn.DenseGeneral(
-            features=(self.num_orbital, self.num_electron), dtype=jnp.float64
+            features=(self.n_bf_dets,self.num_orbital, self.num_electron), dtype=jnp.float64
             )
+        self.bf_det_params = self.param('bf_det_params', nn.initializers.lecun_normal(), (self.n_bf_dets,1))
         
         
 
@@ -47,14 +48,14 @@ class Backflow(nn.Module):
             x = self.activation_fn(x)
         # jax.debug.breakpoint()
         x = self.dense_general(x)
-        x = x[selected_config , :]
+        x = x[:,selected_config,:]
         ##x = jnp.sum(x)
         # x = x + x.T
         ### Slogdet is not a good option as the sgn it provides is discontinous
         ### This creats a problem in the gradient calculation 
         sgn, val = jnp.linalg.slogdet(x)
         x = sgn * jnp.exp(val)
-
+        x = jnp.dot(x, self.bf_det_params)[0]
         #x = jax.jit(jnp.linalg.det,device=jax.devices('cpu')[0])(x)
         
         #x = jnp.average(x) 
