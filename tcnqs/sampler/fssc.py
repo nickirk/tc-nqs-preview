@@ -36,17 +36,17 @@ class FSSC(Sampler):
         num_cisd = (1 + comb(self.n_elec_a,2, exact=True)*comb(n_s_orb-self.n_elec_a,2,exact=True)+comb(self.n_elec_b,2, exact=True)*comb(n_s_orb-self.n_elec_b,2,exact=True)
                     + self.n_elec_a*self.n_elec_b*(n_s_orb-self.n_elec_a)*(n_s_orb-self.n_elec_b) + n_s_orb*(self.n_elec_a+self.n_elec_b)- self.n_elec_a**2 - self.n_elec_b**2)
         ## 3 is arbitary here ## Approx number of samples to take
-        approx_number = 3*int(jnp.ceil(self.n_core/num_cisd))
+        approx_number = int(jnp.ceil(3*self.n_core/num_cisd))
 
-        padding = jnp.zeros(self.n_spac_orb)
+        # padding = jnp.zeros(self.n_spac_orb)
         # core_space = jnp.empty((self.n_core, self.n_spac_orb), dtype=jnp.uint8)
-        # Following 2 lines generates new elemets for core space from the cisd space 
+        # FollowToward Real Chemical Accuracy on Current Quantum Hardwareing 2 lines generates new elemets for core space from the cisd space 
         # and then remove the elements that are  already present in cisd space and extra padding
-        core_space = self._vmap_generate_connected_space(cisd_space)
+        core_space = self._vmap_generate_connected_space(cisd_space[1:approx_number])
         core_space = jnp.reshape(core_space,(-1, self.n_spac_orb))
         core_space = self._remove_core_elements(core_space,cisd_space)
         core_space = self._remove_excess_padding(core_space)
-        core_space = jnp.unique(core_space,axis=0,size=self.n_core-num_cisd)
+        core_space = jnp.unique(core_space,axis=0)
         core_space = jnp.concatenate((cisd_space,core_space))[:self.n_core]
         # core_space = jnp.unique(core_space, size = self.n_core ,axis=0,fill_value=jnp.zeros(self.n_spac_orb))
         

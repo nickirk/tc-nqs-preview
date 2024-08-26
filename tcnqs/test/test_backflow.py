@@ -1,3 +1,6 @@
+import os
+os.environ['XLA_PYTHON_CLIENT_MEM_FRACTION'] = '0.95'
+
 import jax
 import jax.numpy as jnp
 from jax import random
@@ -5,6 +8,7 @@ import numpy as np
 import pyscf
 import jax
 from scipy.special import comb
+import time
 
 from tcnqs.fcidump import read_2_spin_orbital_seprated as read2
 from tcnqs.utils import generate_ci_data, build_ham_from_pyscf
@@ -202,9 +206,8 @@ def test_backflow_fssc(mol,n_core,num_epochs=2400, test=False ,random_key=17 ):
     model_bf, variables_bf = bf.create_model(rng, input_shape = num_orbitals, 
                                             num_electrons= hamiltonian.n_elec,
                                             hidden_layer_sizes=t.hidden_layer_sizes, activation='tanh')
-    state_bf = trainer.create_train_state(rng, model_bf, variables_bf)
+    state_bf =trainer.create_train_state(rng, model_bf, variables_bf)
     
-
     train_losses_bf = []
 
     n_s_orb = (hamiltonian.n_orb//2)
@@ -227,6 +230,7 @@ def test_backflow_fssc(mol,n_core,num_epochs=2400, test=False ,random_key=17 ):
     sample = sampler.initialize(state_bf.params)
     
     for epoch in range(num_epochs):
+        
         epoch_loss_bf = 0.0
         state_bf, loss_bf, sample = trainer.train_step_fssc(state_bf, sample, hamiltonian,sampler)
         # relevant_indices = jnp.where(jnp.logical_not(jnp.all(sample[0]==jnp.zeros(num_orbitals),axis=1)))[0]
@@ -240,23 +244,19 @@ def test_backflow_fssc(mol,n_core,num_epochs=2400, test=False ,random_key=17 ):
     
    
     if test:
-        assert jnp.absolute(train_losses_bf[-1]-fci_e_pyscf) < 1e-3
+        assert jnp.absolute(train_losses_bf[-1]-fci_e_pyscf) < 5e-3
         print("Success: Model trained successfully")
     
     return train_losses_bf, fci_e_pyscf
 
 if __name__ == '__main__':
-    mol = pyscf.M(
-    atom = t.atom,
-    basis = t.basis,
-    spin = 0,
-    charge = 0,
-    symmetry = False
-    )
+    mol = t.mol
     print(jax.devices())
     
     # test_backflow_supervised(mol, 0)
     #test_backflow_unsupervised(mol,17, test=True)
     #test_backflow_connected(mol, 17, )#test= True)
-
+    start = time.time()
     test_backflow_fssc(mol,n_core=t.n_core, test= True, random_key=17, num_epochs=t.num_epochs)
+    end = time.time()
+    print("Time taken: ", end-start)

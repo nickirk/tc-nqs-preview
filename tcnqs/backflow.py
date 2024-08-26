@@ -49,12 +49,15 @@ class Backflow(nn.Module):
         x = self.dense_general(x)
         x = x[selected_config , :]
         ##x = jnp.sum(x)
-        
+        # x = x + x.T
         ### Slogdet is not a good option as the sgn it provides is discontinous
         ### This creats a problem in the gradient calculation 
         sgn, val = jnp.linalg.slogdet(x)
         x = sgn * jnp.exp(val)
-        #x = jnp.linalg.det(x)
+
+        #x = jax.jit(jnp.linalg.det,device=jax.devices('cpu')[0])(x)
+        
+        #x = jnp.average(x) 
 
         # trim away inf values in val and replace them with 0
         # val = jnp.where(jnp.isinf(val), 0, val)
@@ -64,7 +67,9 @@ class Backflow(nn.Module):
         # jax.debug.breakpoint()
         #x = self.dense_general(x)
         #x = x[selected_config , :]
-        #x = jnp.sum(x)
+        #x = jnp.sum(x)# sgn, val = jnp.linalg.slogdet(x)
+        # x = sgn * jnp.exp(val)
+        # x = jnp.linalg.det(x)
         
         ### Slogdet is not a good option as the sgn it provides is discontinous
         ### This creats a problem in the gradient calculation 
@@ -90,5 +95,11 @@ def create_model(rng, input_shape, num_electrons, hidden_layer_sizes=[4],
     variables = model.init(rng,initial)#initializer=normal 
     return model, variables
 
-
+# @jax.jit(device=jax.devices('cpu')[0])
+# def det(x):
+#     # sgn, val = jnp.linalg.slogdet(x)
+#     # x = sgn * jnp.exp(val)
+#     x = jnp.linalg.det(x)
+#     return x
+    
 

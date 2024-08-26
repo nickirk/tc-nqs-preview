@@ -52,7 +52,10 @@ def generate_connected_space(determinant: jnp.array,
                                             possible_excitations(det_alpha_0, det_beta_2, 2*n_spa_orb)),axis=0)
         
         return all_excitations
-
+    
+    
+    # If the determinant is a a padded element, return a zero array
+    # num_connections is required to make size same as output of _generate_connected_space
     def _generate_padding():
         # n_spa_orb = len(determinant)//2
         num_connections = (1 + comb(n_elec_a,2, exact=True)*comb(n_spa_orb-n_elec_a,2,exact=True)+comb(n_elec_b,2, exact=True)*comb(n_spa_orb-n_elec_b,2,exact=True)
