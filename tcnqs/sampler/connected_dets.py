@@ -80,7 +80,10 @@ def single_excitations(determinant, particle_pos , hole_pos):
 
 @partial(jax.vmap, in_axes=(0,None))
 def excite_single(pair,determinant):
-    return determinant.at[pair[0]].set(0).at[pair[1]].set(1)  
+    excite = jnp.zeros((determinant.shape),dtype=jnp.uint8)
+    excite = excite.at[pair].set(1)
+    return jnp.bitwise_xor(determinant,excite)
+    #return determinant.at[pair[0]].set(0).at[pair[1]].set(1)  
 
 #@jax.jit
 def double_excitations(determinant, particle_pos, hole_pos):
@@ -96,9 +99,11 @@ def double_excitations(determinant, particle_pos, hole_pos):
     
 @partial(jax.vmap, in_axes=(0,None,None,None))
 def excite_double(pair, particles_select, holes_select , determinant):
-    a_i = particles_select[pair[0]]
-    a_d_i = holes_select[pair[1]]
-    return determinant.at[a_i].set(0).at[a_d_i].set(1)
+    a = jnp.concatenate((holes_select[pair[1]],particles_select[pair[0]]))
+    excite = jnp.zeros((determinant.shape),dtype=jnp.uint8)
+    excite = excite.at[a].set(1)
+    return jnp.bitwise_xor(determinant,excite)
+    #return determinant.at[a_i].set(0).at[a_d_i].set(1)
     
 if __name__ == '__main__':
     det= jnp.array([1,0,0,1,0,1,0,1,0,0], dtype=jnp.uint8)
