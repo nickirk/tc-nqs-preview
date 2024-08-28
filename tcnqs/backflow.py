@@ -15,9 +15,10 @@ class Backflow(nn.Module):
 
     num_orbital: int
     num_electron: int
+    n_bf_dets: int 
     hidden_layer_sizes: List[int] = field(default_factory=lambda: [4, 4])
     activation: str = 'relu'
-    n_bf_dets: int = 1
+    
     
     def setup(self) -> None:
         # Map the string to the actual function
@@ -85,8 +86,8 @@ def positive_random_init(key, shape, dtype=jnp.float32):
     return random.uniform(key, shape, dtype, minval=0, maxval=0.2)
 
 def create_model(rng, input_shape, num_electrons, hidden_layer_sizes=[4],    
-                 activation='relu'): 
-    model = Backflow(num_orbital=input_shape, num_electron=num_electrons, 
+                 activation='relu', n_bf_dets = 1): 
+    model = Backflow(num_orbital=input_shape, num_electron=num_electrons,  n_bf_dets= n_bf_dets,
                      hidden_layer_sizes=hidden_layer_sizes,
                      activation=activation)
     initial=jnp.concatenate((jnp.ones(num_electrons),

@@ -11,4 +11,4 @@ mol = pyscf.M(
     charge = 0,
     symmetry = False
     )
-
+n_bf_dets = 5
