@@ -49,10 +49,11 @@ class Backflow(nn.Module):
         
         x = self.dense_general(x)
         x = x[:,selected_config,:]
-        x = jnp.linalg.vecdot( self.bf_det_params ,x, axis=0)
+        #x = jnp.linalg.vecdot( self.bf_det_params ,x, axis=0)
         sgn, val = jnp.linalg.slogdet(x)
         x = sgn * jnp.exp(val)
-        #[0]
+
+        x = jnp.dot(x,self.bf_det_params)[0]
         return jax.lax.select(jnp.sum(selected_config)==0, 0.0,jnp.float64(x))
 
 def positive_random_init(key, shape, dtype=jnp.float32):
