@@ -43,44 +43,17 @@ class Backflow(nn.Module):
     def __call__(self, x):
         
         selected_config = jnp.nonzero(x, size=self.num_electron)[0]
-        
         for dense_layer in self.hidden_dense:
             x = dense_layer(x)
             x = self.activation_fn(x)
-        # jax.debug.breakpoint()
+        
         x = self.dense_general(x)
         x = x[:,selected_config,:]
-        ##x = jnp.sum(x)
-        # x = x + x.T
-        ### Slogdet is not a good option as the sgn it provides is discontinous
-        ### This creats a problem in the gradient calculation 
+        x = jnp.linalg.vecdot( self.bf_det_params ,x, axis=0)
         sgn, val = jnp.linalg.slogdet(x)
         x = sgn * jnp.exp(val)
-        x = jnp.dot(x, self.bf_det_params)[0]
-        #x = jax.jit(jnp.linalg.det,device=jax.devices('cpu')[0])(x)
-        
-        #x = jnp.average(x) 
-
-        # trim away inf values in val and replace them with 0
-        # val = jnp.where(jnp.isinf(val), 0, val)
-        #logmax = jnp.max(val)
-        
-        #print(x)
-        # jax.debug.breakpoint()
-        #x = self.dense_general(x)
-        #x = x[selected_config , :]
-        #x = jnp.sum(x)# sgn, val = jnp.linalg.slogdet(x)
-        # x = sgn * jnp.exp(val)
-        # x = jnp.linalg.det(x)
-        
-        ### Slogdet is not a good option as the sgn it provides is discontinous
-        ### This creats a problem in the gradient calculation 
-        
-        #sgn, val = jnp.linalg.slogdet(x)
-        # x = sgn * jnp.exp(val)
-        # x = jax.lax.select(val>-5,jnp.float64(sgn * jnp.exp(val)),0.0)
-
-        return jax.lax.cond(jnp.sum(selected_config)==0,lambda :0.0,lambda :jnp.float64(x))
+        #[0]
+        return jax.lax.select(jnp.sum(selected_config)==0, 0.0,jnp.float64(x))
 
 def positive_random_init(key, shape, dtype=jnp.float32):
     return random.uniform(key, shape, dtype, minval=0, maxval=0.2)
@@ -105,3 +78,29 @@ def create_model(rng, input_shape, num_electrons, hidden_layer_sizes=[4],
 #     return x
     
 
+# jax.debug.breakpoint()
+##x = jnp.sum(x)
+# x = x + x.T
+
+#x = jax.jit(jnp.linalg.det,device=jax.devices('cpu')[0])(x)
+
+#x = jnp.average(x) 
+
+# trim away inf values in val and replace them with 0
+# val = jnp.where(jnp.isinf(val), 0, val)
+#logmax = jnp.max(val)
+
+#print(x)
+# jax.debug.breakpoint()
+#x = self.dense_general(x)
+#x = x[selected_config , :]
+#x = jnp.sum(x)# sgn, val = jnp.linalg.slogdet(x)
+# x = sgn * jnp.exp(val)
+# x = jnp.linalg.det(x)
+
+### Slogdet is not a good option as the sgn it provides is discontinous
+### This creats a problem in the gradient calculation 
+
+#sgn, val = jnp.linalg.slogdet(x)
+# x = sgn * jnp.exp(val)
+# x = jax.lax.select(val>-5,jnp.float64(sgn * jnp.exp(val)),0.0)

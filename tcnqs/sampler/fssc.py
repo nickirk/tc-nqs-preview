@@ -40,7 +40,7 @@ class FSSC(Sampler):
 
         # padding = jnp.zeros(self.n_spac_orb)
         # core_space = jnp.empty((self.n_core, self.n_spac_orb), dtype=jnp.uint8)
-        # FollowToward Real Chemical Accuracy on Current Quantum Hardwareing 2 lines generates new elemets for core space from the cisd space 
+        # 2 lines generates new elemets for core space from the cisd space 
         # and then remove the elements that are  already present in cisd space and extra padding
         core_space = self._vmap_generate_connected_space(cisd_space[1:approx_number])
         core_space = jnp.reshape(core_space,(-1, self.n_spac_orb))
