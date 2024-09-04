@@ -2,7 +2,7 @@ import jax.numpy as jnp
 from jax import jit, lax
 import jax
 from functools import partial
-# Potential Issue: not compitable with different number of electrons in alpha and beta seprated orbitals
+
 ## WARNING: Using @partial for self to be static_argnums:- Once the hamiltonian is created, it is fixed and does not change
 ## refer Strategy 2 in https://jax.readthedocs.io/en/latest/faq.html 
 
