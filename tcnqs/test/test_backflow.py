@@ -1,6 +1,6 @@
 import os
 os.environ['XLA_PYTHON_CLIENT_MEM_FRACTION'] = '0.95'
-
+# os.environ['XLA_FLAGS'] = '--xla_gpu_enable_tracing'
 import jax
 import jax.numpy as jnp
 from jax import random
@@ -13,7 +13,7 @@ import time
 from tcnqs.fcidump import read_2_spin_orbital_seprated as read2
 from tcnqs.utils import generate_ci_data, build_ham_from_pyscf
 import tcnqs.backflow as bf
-import tcnqs.trainer as trainer
+import tcnqs.trainer_refactor as trainer
 from tcnqs.sampler.fssc import FSSC
 import tcnqs.test.test_parameters as t
 
@@ -55,7 +55,7 @@ def test_backflow_supervised(mol, random_key):
         average_epoch_loss = epoch_loss / (num_samples // batch_size)
         train_losses.append(average_epoch_loss)
         rng = subrng
-        print(f"Epoch {epoch+1}, Loss: {average_epoch_loss}")
+        print(f"Epoch {epoch+1}, Loss: {average_epoch_loss}" )
     
     
     # with open('params.pkl', 'wb') as f:
@@ -189,7 +189,7 @@ def test_backflow_connected(mol, random_key , num_epochs=2400, test=False):
 def test_backflow_fssc(mol,n_core,num_epochs=2400, test=False ,random_key=17 ):
     if test:
         jax.config.update("jax_enable_x64", True)
-    
+        jax.config.update("jax_debug_nans", True)
     rng = random.PRNGKey(random_key)
     myhf = mol.RHF().run()
     cisolver = pyscf.fci.FCI(myhf)
@@ -228,6 +228,7 @@ def test_backflow_fssc(mol,n_core,num_epochs=2400, test=False ,random_key=17 ):
     
     sampler = FSSC(n_core, n_connected ,hamiltonian.n_elec_a, hamiltonian.n_elec_b, num_orbitals,state_bf.apply_fn)
     sample = sampler.initialize(state_bf.params)
+    sample = sample[0][:sampler.n_core]
     
     for epoch in range(num_epochs):
         
@@ -241,7 +242,7 @@ def test_backflow_fssc(mol,n_core,num_epochs=2400, test=False ,random_key=17 ):
         train_losses_bf.append(average_epoch_loss_bf + hamiltonian.e_core)
         
         print(f"Epoch {epoch+1} , Loss_bf: {average_epoch_loss_bf + hamiltonian.e_core}")
-    
+        #jax.profiler.stop_trace()
    
     if test:
         #assert jnp.absolute(train_losses_bf[-1]-fci_e_pyscf) < 5e-3
@@ -252,13 +253,13 @@ def test_backflow_fssc(mol,n_core,num_epochs=2400, test=False ,random_key=17 ):
 if __name__ == '__main__':
     mol = t.mol
     print(jax.devices())
-    
+    #with jax.profiler.trace("/tmp/jax-trace", create_perfetto_link=True):
     # test_backflow_supervised(mol, 0)
     #test_backflow_unsupervised(mol,17, test=True)
     #test_backflow_connected(mol, 17, )#test= True)
     start = time.time()
-    jax.profiler.start_trace("tmp/tensorboard")
+    #jax.profiler.start_trace("tmp/jax-trace",create_perfetto_link=True)
     test_backflow_fssc(mol,n_core=t.n_core, test= True, random_key=17, num_epochs=t.num_epochs)
-    jax.profiler.stop_trace()
+    #jax.profiler.stop_trace()
     end = time.time()
     print("Time taken: ", end-start)
