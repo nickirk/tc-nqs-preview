@@ -46,7 +46,7 @@ class FSSC(Sampler):
         core_space = jnp.reshape(core_space,(-1, self.n_spac_orb))
         core_space = self._remove_core_elements(core_space,cisd_space)
         core_space = self._remove_excess_padding(core_space)
-        core_space = jnp.unique(core_space,axis=0)
+        core_space = jnp.unique(core_space,axis=0,size=self.n_core,fill_value=jnp.zeros(self.n_spac_orb))
         core_space = jnp.concatenate((cisd_space,core_space))[:self.n_core]
         # core_space = jnp.unique(core_space, size = self.n_core ,axis=0,fill_value=jnp.zeros(self.n_spac_orb))
         

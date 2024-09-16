@@ -1,5 +1,5 @@
 import os
-os.environ['XLA_PYTHON_CLIENT_MEM_FRACTION'] = '0.95'
+os.environ['XLA_PYTHON_CLIENT_MEM_FRACTION'] = '0.1'
 # os.environ['XLA_FLAGS'] = '--xla_gpu_enable_tracing'
 import jax
 import jax.numpy as jnp
@@ -229,19 +229,24 @@ def test_backflow_fssc(mol,n_core,num_epochs=2400, test=False ,random_key=17 ):
     sampler = FSSC(n_core, n_connected ,hamiltonian.n_elec_a, hamiltonian.n_elec_b, num_orbitals,state_bf.apply_fn)
     sample = sampler.initialize(state_bf.params)
     sample = sample[0][:sampler.n_core]
-    
+
+
+    flag= True
+    stored = trainer.sample_ham_wrap(sample,hamiltonian,sampler)
+
     for epoch in range(num_epochs):
         
         epoch_loss_bf = 0.0
-        state_bf, loss_bf, sample = trainer.train_step_fssc(state_bf, sample, hamiltonian,sampler)
+        a=time.time()
+        state_bf, loss_bf, sample, flag, stored = trainer.train_step_fssc(state_bf, sample, hamiltonian,sampler,flag, stored)
         # relevant_indices = jnp.where(jnp.logical_not(jnp.all(sample[0]==jnp.zeros(num_orbitals),axis=1)))[0]
         # sample =(sample[0][relevant_indices],sample[1][relevant_indices]) 
-        
+        b=time.time()
         epoch_loss_bf += loss_bf
         average_epoch_loss_bf = epoch_loss_bf # / (num_samples // batch_size)
         train_losses_bf.append(average_epoch_loss_bf + hamiltonian.e_core)
         
-        print(f"Epoch {epoch+1} , Loss_bf: {average_epoch_loss_bf + hamiltonian.e_core}")
+        print(f"Epoch {epoch+1} , Loss_bf: {average_epoch_loss_bf + hamiltonian.e_core},{b-a},{flag}")
         #jax.profiler.stop_trace()
    
     if test:
