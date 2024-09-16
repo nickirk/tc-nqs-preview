@@ -13,15 +13,15 @@ Conventions in naming:
 
 The following nvidia dependencies are required for CUDA version 12.4 installed on most devices on physics cluster.
 
-nvidia-cublas-cu12           12.3.4.1
-nvidia-cuda-cupti-cu12       12.3.101
-nvidia-cuda-nvcc-cu12        12.3.107
-nvidia-cuda-nvrtc-cu12       12.3.107
-nvidia-cuda-runtime-cu12     12.3.101
-nvidia-cudnn-cu12            9.3.0.75
-nvidia-cufft-cu12            11.0.12.1
-nvidia-curand-cu12           10.3.4.107
-nvidia-cusolver-cu12         11.4.5.107
-nvidia-cusparse-cu12         12.2.0.103
-nvidia-nccl-cu12             2.19.3
-nvidia-nvjitlink-cu12        12.3.101
+nvidia-cublas-cu12           12.3.4.1\
+nvidia-cuda-cupti-cu12       12.3.101\
+nvidia-cuda-nvcc-cu12        12.3.107\
+nvidia-cuda-nvrtc-cu12       12.3.107\
+nvidia-cuda-runtime-cu12     12.3.101\
+nvidia-cudnn-cu12            9.3.0.75\
+nvidia-cufft-cu12            11.0.12.1\
+nvidia-curand-cu12           10.3.4.107\
+nvidia-cusolver-cu12         11.4.5.107\
+nvidia-cusparse-cu12         12.2.0.103\
+nvidia-nccl-cu12             2.19.3\
+nvidia-nvjitlink-cu12        12.3.101\
