@@ -1,11 +1,13 @@
 import jax.numpy as jnp
 from jax import jit, lax
 import jax
+from jax.tree_util import register_pytree_node_class
 from functools import partial
 
 ## WARNING: Using @partial for self to be static_argnums:- Once the hamiltonian is created, it is fixed and does not change
 ## refer Strategy 2 in https://jax.readthedocs.io/en/latest/faq.html 
 
+@register_pytree_node_class
 class Hamiltonian:
     def __init__(self, n_elec_a: int, n_elec_b: int, 
                  n_orb: int, e_core: float, h1g: jnp.array, g2e: jnp.array) -> None:
@@ -18,10 +20,26 @@ class Hamiltonian:
         self.h1g = h1g
         self.g2e = g2e
         self.e_core = e_core
+        
         self.sorted_g2e, self.sorted_inds = self.setup_hci()
-    
+
+    def tree_flatten(self):
+    # Return the dynamic fields and static fields separately
+        dynamic = ()  # Include any fields that should be transformed (for example, if any mutable arrays)
+        static = (self.n_elec_a, self.n_elec_b, self.n_orb, self.e_core,self.h1g, self.g2e,self.n_elec,self.sorted_g2e,self.sorted_inds)
+        return dynamic, static
+
+    @classmethod
+    def tree_unflatten(cls, static, dynamic):
+        # Reconstruct the class with static fields, dynamic can be ignored if empty
+        instance = cls(*static[:6])
+        instance.n_elec = static[6]
+        instance.sorted_g2e , instance.sorted_inds = static[7:]
+
+        return instance
     # By convention det1 is the bra and det2 is the ket always
-    @partial(jit, static_argnums=(0))
+    # @partial(jit, static_argnums=(0))
+    @jax.jit
     def __call__(self, det1, det2):
         det1 = jnp.asarray(det1, dtype=jnp.int8)
         det2 = jnp.asarray(det2, dtype=jnp.int8)

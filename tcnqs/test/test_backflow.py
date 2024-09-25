@@ -226,7 +226,7 @@ def test_backflow_fssc(mol,n_core,num_epochs=2400, test=False ,random_key=17 ):
     
     n_connected =  jnp.minimum(n_total_dets, max_n_full) - n_core
     
-    sampler = FSSC(n_core, n_connected ,hamiltonian.n_elec_a, hamiltonian.n_elec_b, num_orbitals,state_bf.apply_fn)
+    sampler = FSSC(n_core, n_connected ,hamiltonian.n_elec_a, hamiltonian.n_elec_b, num_orbitals)
     sample = sampler.initialize()
     stored = sampler.next_sample_stored(sample,hamiltonian)
     flag = True
@@ -236,7 +236,7 @@ def test_backflow_fssc(mol,n_core,num_epochs=2400, test=False ,random_key=17 ):
         
         epoch_loss_bf = 0.0
         #a=time.time()
-        state_bf, loss_bf, sample, flag, stored = trainer.train_step_fssc(state_bf, sample, flag, stored, hamiltonian,sampler)
+        state_bf, loss_bf, sample, flag, stored = trainer.train_step_fssc(state_bf, sample, flag, stored, hamiltonian, sampler)
         # relevant_indices = jnp.where(jnp.logical_not(jnp.all(sample[0]==jnp.zeros(num_orbitals),axis=1)))[0]
         # sample =(sample[0][relevant_indices],sample[1][relevant_indices]) 
         #b=time.time()
