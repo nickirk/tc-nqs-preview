@@ -89,3 +89,5 @@ def read_2_spin_orbital_seprated(fcidump_file):
                     g2e_s[i, k+n_sites, l+n_sites, j] = g2e[i, k, l, j]
                     g2e_s[i+n_sites, k, l, j+n_sites] = g2e[i, k, l, j]
     return n_sites, n_elec, ecore, h1e_s, g2e_s
+
+# Can make a new function by using jax functions instead of these classical functions

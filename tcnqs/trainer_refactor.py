@@ -9,7 +9,6 @@ from tcnqs.sampler.fssc import FSSC
 from tcnqs.test.test_parameters import learning_rate 
 
 # Handle sample function partial(jax.jit, static_argnums=(1,2))
-
 ## Temperory function with truncated functionality
 @partial(jax.jit, static_argnums=(1))
 def sample_new(sample_core, sampler):
@@ -22,7 +21,6 @@ def sample_new(sample_core, sampler):
 
 
 # Handle Hamiltonian Function
-#@jax.profiler.annotate_function
 @partial(jax.jit, static_argnums=(1,2))
 def ham(sample_core, Hamiltonain, sampler):
     #sample_core = sample[0][sample[1][:sampler.n_core]].reshape(-1,sampler.n_spac_orb)
@@ -36,7 +34,6 @@ def ham(sample_core, Hamiltonain, sampler):
 
     
 # Handle Energy calculation
-#@jax.profiler.annotate_function
 @partial(jax.jit,static_argnums=(4))
 def energy(params,sample,ham_stored,state,sampler):
     # calculate ci coefficients
@@ -44,9 +41,6 @@ def energy(params,sample,ham_stored,state,sampler):
     # claculate sum Psi_H_Psi = sum_ij C_i* C_j* <xi|H|xj> 
     # return sum(Psi_H_Psi)/Norm**2
     
-    # full_space = jnp.concatenate((ham_out[0],ham_out[1].reshape(-1,sampler.n_spac_orb)),axis=0)
-    # unique_full, idx = jnp.unique(full_space,axis=0, size = sampler.n_full, return_inverse=True
-    #                                     ,fill_value=jnp.zeros(sampler.n_spac_orb))
     unique_full,idx = sample
     Ci = state.apply_fn({'params': params},unique_full)
     Norm = jnp.linalg.norm(Ci)
@@ -60,19 +54,7 @@ def energy(params,sample,ham_stored,state,sampler):
 
     return e,new_sample_core
 
-    #ci_connected = jax.vmap(find_Ci, in_axes=(0))(ham_out[1])
-    # def findciconnected(carry,connected_space):
-    #     return carry,find_Ci(connected_space)
-    # carry,ci_connected = jax.lax.scan(findciconnected,0,ham_out[1])
-    # Ci = state.apply_fn({'params': params}, sample)
-    # @partial(jax.vmap, in_axes=(0))
-    # def find_Ci(det):
-    #     condition=jnp.all(sample==det,axis=1)
-    #     return jnp.asarray(Ci[jnp.where(condition, size = 1)[0][0]])
-    #with jax.profiler.TraceAnnotation("find ci"):
-    #jnp.sum(Ci),(sample,Ci)#
-    
-# Handle Gradients and Optimizers  
+
 #@jax.profiler.annotate_function
 @partial(jax.jit,static_argnums=(3))
 def new_state(state, sample ,ham_stored,sampler):
@@ -85,10 +67,6 @@ def new_state(state, sample ,ham_stored,sampler):
 def sample_ham_wrap(sample_core,Hamiltonain,sampler):
     #sample = sample_new(sample_core,sampler)
     return sample_new(sample_core,sampler), ham(sample_core,Hamiltonain,sampler)
-# Wrapper function - seprate out all the steps for better memory management in jit 
-#@jax.profiler.annotate_function
-#@partial(jax.jit,static_argnums=(2,3))
-# import time
 
 @partial(jax.jit,static_argnums=(2,3))
 def train_step_fssc(state, sample_core, Hamiltonain, sampler,flag,stored_tuple):
@@ -105,20 +83,7 @@ def train_step_fssc(state, sample_core, Hamiltonain, sampler,flag,stored_tuple):
     return state, loss, new_sample_core, flag, (sample,ham_stored)
 
 
-#     jax.profiler.start_trace("tmp/jax-trace",create_perfetto_link=True)
-#     with jax.profiler.TraceAnnotation("ham_sample"):
-#     if sample_core[1].shape[0]!= sampler.n_core:
-#     a = time.time()
-# else:
-#        sample , ham_stored = s
-#     b= time.time()
-#     loss, _ = energy(state.params,sample,ham_out,state)
-#     with jax.profiler.TraceAnnotation("newstate"):
-#  jax.profiler.stop_trace()
-#     if jnp.all(sample_core==new_sample_core):
-#         new_sample_core = sample , ham_stored
-#     c = time.time()
-#     print(c-b,b-a)
+
 def create_train_state(rng, model, variables):
     tx = optax.adam(learning_rate = learning_rate)
     return train_state.TrainState.create(apply_fn=model.apply, params=variables['params'], tx=tx)

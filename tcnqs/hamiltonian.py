@@ -95,7 +95,6 @@ class Hamiltonian:
                         diff_4,
                         lambda : jax.lax.cond(num_diff == 2, diff_2, 
                                            lambda : jax.lax.cond(num_diff == 0, diff_0, lambda : 0.0)))
-
     
     def setup_hci(self) -> jnp.ndarray:
         # Generate all the pairs of indices
@@ -114,6 +113,7 @@ class Hamiltonian:
             return carry, (elements, sorted_inds)
 
         # Initialize carry (not used in this case)
+        # if carry is not used make use of vmap
         carry = None
 
         # Use jax.lax.scan to iterate over pairs and collect nonzero elements and indices

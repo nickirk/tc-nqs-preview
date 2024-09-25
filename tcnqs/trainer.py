@@ -110,8 +110,10 @@ def train_step_connections(state, batch, Hamiltonain):
     state = state.apply_gradients(grads=grads)
     return state, loss_fn(state.params)
 
+
+#Deprecated Function 
 #@partial(jax.jit, static_argnums=(2,3))
-def train_step_fssc(state, last_sample, Hamiltonain, sampler):
+def _train_step_fssc_old(state, last_sample, Hamiltonain, sampler):
     """
     Parameters
     ----------
@@ -165,6 +167,81 @@ def train_step_fssc(state, last_sample, Hamiltonain, sampler):
     
     state = state.apply_gradients(grads=grads)
     return state, loss, new_sample
+
+# Handle sample function partial(jax.jit, static_argnums=(1,2))
+## Temperory function with truncated functionality
+# Now implemented inside sample
+# @partial(jax.jit, static_argnums=(1))
+# def sample_new(sample_core, sampler):
+#     connected_space = jax.vmap(generate_connected_space,in_axes=(0,None,None))(sample_core,sampler.n_elec_a, sampler.n_elec_b)
+#     full_space = jnp.concatenate((sample_core,connected_space.reshape(-1,sampler.n_spac_orb)),axis=0)
+#     unique_full, idx = jnp.unique(full_space,axis=0, size = sampler.n_full, return_inverse=True
+#                                         ,fill_value=jnp.zeros(sampler.n_spac_orb))
+                                        
+#     return unique_full,idx
+
+# # Handle Hamiltonian Function
+# @partial(jax.jit, static_argnums=(1,2))
+# def ham(sample_core, Hamiltonain, sampler):
+#     #sample_core = sample[0][sample[1][:sampler.n_core]].reshape(-1,sampler.n_spac_orb)
+#     connected_space = jax.vmap(generate_connected_space,in_axes=(0,None,None))(sample_core,Hamiltonain.n_elec_a, Hamiltonain.n_elec_b)
+#     #connected_space = sample[0][sample[1][sampler.n_core:]].reshape(sampler.n_core,-1,sampler.n_spac_orb)
+#     @partial(jax.vmap,in_axes=(0,0))
+#     def psi_H_xi(slater_determinant,connections):
+#         return jax.vmap(Hamiltonain,in_axes=(None,0))(slater_determinant,connections)
+
+#     return psi_H_xi(sample_core,connected_space)
+
+    
+# Handle Energy calculation
+@partial(jax.jit,static_argnums=(4))
+def energy(params,sample,ham_stored,state,sampler):
+    # calculate ci coefficients
+    # calculate norm
+    # claculate sum Psi_H_Psi = sum_ij C_i* C_j* <xi|H|xj> 
+    # return sum(Psi_H_Psi)/Norm**2
+    
+    unique_full,idx = sample
+    Ci = state.apply_fn({'params': params},unique_full)
+    Norm = jnp.linalg.norm(Ci)
+    next_sample_idx = jnp.argsort(jnp.abs(Ci),descending =True)[:sampler.n_core]
+    Ci = Ci[idx]
+    ci_core, ci_connected = Ci[:sampler.n_core], Ci[sampler.n_core:].reshape(sampler.n_core,-1)
+
+    e = jnp.dot(ci_core,jnp.einsum('ij,ij->i', ham_stored,ci_connected))/Norm**2
+    
+    new_sample_core = unique_full[next_sample_idx]
+
+    return e,new_sample_core
+
+
+#@jax.profiler.annotate_function
+@partial(jax.jit,static_argnums=(3))
+def new_state(state, sample ,ham_stored,sampler):
+    #jax.grad = jax.grad(energy) only in first input
+    energy_sample ,grads = jax.value_and_grad(energy, argnums=0, has_aux = True)(state.params, sample, ham_stored, state, sampler)
+    new_state = state.apply_gradients(grads=grads)
+    return new_state ,energy_sample[0],energy_sample[1] ## energy , New sample 
+    
+# @partial(jax.jit,static_argnums=(1,2))
+# def sample_ham_wrap(sample_core,Hamiltonain,sampler):
+#     #sample = sample_new(sample_core,sampler)
+#     return sample_new(sample_core,sampler), ham(sample_core,Hamiltonain,sampler)
+
+@partial(jax.jit,static_argnums=(4,5))
+def train_step_fssc(state, sample_core , flag, stored_tuple, hamiltonain, sampler):
+   
+    @jax.jit
+    def sample_ham_stored(sample_core):
+        return sampler.next_sample_stored(sample_core, hamiltonain)
+
+    sample , ham_stored = jax.lax.cond(flag,lambda x:stored_tuple,sample_ham_stored,sample_core)
+ 
+    state , loss, new_sample_core = new_state(state,sample,ham_stored,sampler)
+    
+    flag = jnp.all(jnp.unique(sample_core,axis =0,size = sampler.n_core)==jnp.unique(new_sample_core,axis = 0,size = sampler.n_core))
+    return state, loss, new_sample_core, flag, (sample,ham_stored)
+
 
 def create_train_state(rng, model, variables):
     tx = optax.adam(learning_rate = learning_rate)

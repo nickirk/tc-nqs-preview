@@ -13,7 +13,7 @@ import time
 from tcnqs.fcidump import read_2_spin_orbital_seprated as read2
 from tcnqs.utils import generate_ci_data, build_ham_from_pyscf
 import tcnqs.backflow as bf
-import tcnqs.trainer_refactor as trainer
+import tcnqs.trainer as trainer
 from tcnqs.sampler.fssc import FSSC
 import tcnqs.test.test_parameters as t
 
@@ -227,30 +227,28 @@ def test_backflow_fssc(mol,n_core,num_epochs=2400, test=False ,random_key=17 ):
     n_connected =  jnp.minimum(n_total_dets, max_n_full) - n_core
     
     sampler = FSSC(n_core, n_connected ,hamiltonian.n_elec_a, hamiltonian.n_elec_b, num_orbitals,state_bf.apply_fn)
-    sample = sampler.initialize(state_bf.params)
-    sample = sample[0][:sampler.n_core]
-
-
-    flag= True
-    stored = trainer.sample_ham_wrap(sample,hamiltonian,sampler)
-
+    sample = sampler.initialize()
+    stored = sampler.next_sample_stored(sample,hamiltonian)
+    flag = True
+    #stored = trainer.sample_ham_wrap(sample,hamiltonian,sampler)
+    #sample = sample[0][:sampler.n_core]
     for epoch in range(num_epochs):
         
         epoch_loss_bf = 0.0
-        a=time.time()
-        state_bf, loss_bf, sample, flag, stored = trainer.train_step_fssc(state_bf, sample, hamiltonian,sampler,flag, stored)
+        #a=time.time()
+        state_bf, loss_bf, sample, flag, stored = trainer.train_step_fssc(state_bf, sample, flag, stored, hamiltonian,sampler)
         # relevant_indices = jnp.where(jnp.logical_not(jnp.all(sample[0]==jnp.zeros(num_orbitals),axis=1)))[0]
         # sample =(sample[0][relevant_indices],sample[1][relevant_indices]) 
-        b=time.time()
-        epoch_loss_bf += loss_bf
-        average_epoch_loss_bf = epoch_loss_bf # / (num_samples // batch_size)
-        train_losses_bf.append(average_epoch_loss_bf + hamiltonian.e_core)
+        #b=time.time()
+        #epoch_loss_bf += loss_bf
+        #average_epoch_loss_bf = epoch_loss_bf # / (num_samples // batch_size)
+        train_losses_bf.append(loss_bf + hamiltonian.e_core)
         
-        print(f"Epoch {epoch+1} , Loss_bf: {average_epoch_loss_bf + hamiltonian.e_core},{b-a},{flag}")
+        print(f"Epoch {epoch+1} , Loss_bf: {loss_bf + hamiltonian.e_core},{flag}")
         #jax.profiler.stop_trace()
    
     if test:
-        #assert jnp.absolute(train_losses_bf[-1]-fci_e_pyscf) < 5e-3
+        assert jnp.absolute(train_losses_bf[-1]-fci_e_pyscf) < 5e-3
         print("Success: Model trained successfully")
     
     return train_losses_bf, fci_e_pyscf
