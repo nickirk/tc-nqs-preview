@@ -7,6 +7,7 @@ from flax.training import train_state
 from functools import partial
 from tcnqs.sampler.connected_dets import generate_connected_space
 from tcnqs.sampler.fssc import FSSC
+from tcnqs.hamiltonian import Hamiltonian
 from tcnqs.test.test_parameters import learning_rate 
 
 @jax.jit
@@ -50,7 +51,7 @@ def train_step_log(state,batch):
     return state, loss_fn(state.params)
 
 @jax.jit
-def train_step_hamiltonian(state, batch, H):
+def train_step_hamiltonian(state, batch, H: jnp.ndarray): # H is the Hamiltonian matrix
     def hamiltonian_loss(params,apply_fn,x,H):
     
         preds = apply_fn({'params': params}, x)
@@ -71,12 +72,12 @@ def train_step_hamiltonian(state, batch, H):
     return state, loss_fn(state.params)
 
 @partial(jax.jit, static_argnums=(2))
-def train_step_connections(state, batch, Hamiltonain):
+def train_step_connections(state, batch, Hamiltonain): # H is the Hamiltonian class
     """
     Parameters
     ----------
     state : flax.training.train_state.TrainState
-        The current state of the training.
+        The current state of the training. 
     batch : jnp.ndarray, the full Hilbert space determinants. 
     Hamiltonain : Hamiltonian, the Hamiltonian object.
     """
@@ -178,11 +179,11 @@ def energy(params,sample,ham_stored,state,sampler):
     
     unique_full,idx = sample
     Ci = state.apply_fn({'params': params},unique_full)
-    Norm = jnp.linalg.norm(Ci)
+    
     next_sample_idx = jnp.argsort(jnp.abs(Ci),descending =True)[:sampler.n_core]
     Ci = Ci[idx]
     ci_core, ci_connected = Ci[:sampler.n_core], Ci[sampler.n_core:].reshape(sampler.n_core,-1)
-
+    Norm = jnp.linalg.norm(Ci)
     e = jnp.dot(ci_core,jnp.einsum('ij,ij->i', ham_stored,ci_connected))/Norm**2
     
     new_sample_core = unique_full[next_sample_idx]
@@ -194,21 +195,58 @@ def new_state(state, sample ,ham_stored,sampler):
     #jax.grad = jax.grad(energy) only in first input
     energy_sample ,grads = jax.value_and_grad(energy, argnums=0, has_aux = True)(state.params, sample, ham_stored, state, sampler)
     new_state = state.apply_gradients(grads=grads)
-    return new_state ,energy_sample[0],energy_sample[1] ## energy , New sample 
+    sampler = sampler.update_core_space(energy_sample[1])
+    return new_state ,energy_sample[0],sampler ## energy , New sample 
 
 # @partial(jax.jit,static_argnums=(4))
 @jax.jit
-def train_step_fssc(state, sample_core , flag, stored_tuple, hamiltonain, sampler):
+def train_step_fssc(state , hamiltonain, sampler, flag, stored_tuple):
+    sample_core = sampler.core_space
+    def sample_ham_stored():
+        return sampler.next_sample_stored(hamiltonain)
 
-    def sample_ham_stored(sample_core):
-        return sampler.next_sample_stored(sample_core, hamiltonain)
-
-    sample , ham_stored = jax.lax.cond(flag,lambda x:stored_tuple,sample_ham_stored,sample_core)
+    sample , ham_stored = jax.lax.cond(flag,lambda :stored_tuple,sample_ham_stored)
  
-    state , loss, new_sample_core = new_state(state,sample,ham_stored,sampler)
+    state , loss, sampler = new_state(state,sample,ham_stored,sampler)
     
-    flag = jnp.all(jnp.unique(sample_core,axis =0,size = sampler.n_core)==jnp.unique(new_sample_core,axis = 0,size = sampler.n_core))
-    return state, loss, new_sample_core, flag, (sample,ham_stored)
+    flag = jnp.all(jnp.unique(sample_core,axis =0,size = sampler.n_core)==jnp.unique(sampler.core_space,axis = 0,size = sampler.n_core))
+    return state, loss, sampler, flag, (sample,ham_stored)
+
+
+def energy_batched(params,hamiltonian,state,sampler,batch_size):
+    batches = sampler.core_space.reshape(-1,batch_size,sampler.n_spac_orb)
+    def energy_batch(carry, batch):
+        sample_new,numerator,denominator = carry 
+
+        batch_full, ham_stored= sampler.next_sample_stored_batch(batch,hamiltonian)
+ 
+        unique_full,idx = batch_full
+        Ci = state.apply_fn({'params': params},unique_full)
+        #next_sample_idx = jnp.argsort(jnp.abs(Ci),descending =True)[:sampler.n_core]
+        
+        Ci = Ci[idx]
+        #reshape into batchsize multiples
+        ci_core, ci_connected = Ci[:batch.shape[0]], Ci[batch.shape[0]:].reshape(batch.shape[0],-1)
+        denominator += jnp.linalg.norm(ci_core)**2
+        numerator += jnp.dot(ci_core,jnp.einsum('ij,ij->i', ham_stored,ci_connected))
+        
+        next_sample_idx = jnp.argsort(jnp.concatenate([sample_new[1], Ci]), descending=True)[:sampler.n_core]
+        sample_new = (jnp.concatenate([sample_new[0], unique_full])[next_sample_idx], 
+                  jnp.concatenate([sample_new[1], Ci])[next_sample_idx])
+        carry = (sample_new,numerator,denominator)
+        return (carry, None)
+    carry_init = ((jnp.zeros((sampler.n_core,sampler.n_spac_orb),dtype=jnp.uint8),jnp.zeros(sampler.n_core,dtype=jnp.float64)), 0.0 , 0.0)
+    final_carry,_ = jax.lax.scan(energy_batch,carry_init, batches)
+    energy = final_carry[1]/final_carry[2]
+    sample_new = final_carry[0]
+    return energy, sample_new
+
+def train_step_batched(state, hamiltonian: Hamiltonian, sampler : FSSC, batch_size :int):
+    #jax.grad = jax.grad(energy) only in first input
+    aux ,grads = jax.value_and_grad(energy_batched, argnums=0, has_aux = True)(state.params, hamiltonian ,state, sampler,batch_size)
+    new_state = state.apply_gradients(grads=grads)
+    sampler = sampler.update_core_space(aux[1])
+    return new_state , aux[0], sampler ## energy , New sample 
 
 
 def create_train_state(rng, model, variables):

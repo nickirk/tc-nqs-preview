@@ -4,8 +4,8 @@ import jax
 from jax.tree_util import register_pytree_node_class
 from functools import partial
 
-## WARNING: Using @partial for self to be static_argnums:- Once the hamiltonian is created, it is fixed and does not change
-## refer Strategy 2 in https://jax.readthedocs.io/en/latest/faq.html 
+# For documentation to Jax PyTrees:
+# https://jax.readthedocs.io/en/latest/pytrees.html#applying-optional-parameters-to-pytrees
 
 @register_pytree_node_class
 class Hamiltonian:
@@ -37,20 +37,21 @@ class Hamiltonian:
         instance.sorted_g2e , instance.sorted_inds = static[7:]
 
         return instance
+        
     # By convention det1 is the bra and det2 is the ket always
-    # @partial(jit, static_argnums=(0))
     @jax.jit
     def __call__(self, det1, det2):
         det1 = jnp.asarray(det1, dtype=jnp.int8)
         det2 = jnp.asarray(det2, dtype=jnp.int8)
         return self._get_1body(det1, det2)  + self._get_2body(det1, det2)
     
+    # Update: This is not an isssue!
     # Potential Issue: Only for even number of electrons in the alpha and beta seprated orbitals both
     def phase(self,det,j):
         sum_result = jnp.sum(jnp.where(jnp.arange(self.n_orb) < j, det, 0))
         return 1 - 2 * (sum_result % 2)
     
-    #@partial(jit, static_argnums=(0))
+
     def _get_1body(self, det1, det2):
         diff = jnp.bitwise_xor(det1, det2)
         num_diff = jnp.sum(diff)
@@ -72,7 +73,7 @@ class Hamiltonian:
                         lambda : lax.cond(
                         num_diff == 0, diff_0, lambda : 0.0))
 
-    #@partial(jit, static_argnums=(0))
+
     def _get_2body(self, det1, det2):
         diff = jnp.bitwise_xor(det1, det2)
         num_diff = jnp.sum(diff)
