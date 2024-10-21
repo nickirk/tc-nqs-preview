@@ -1,6 +1,6 @@
 import os
-os.environ['XLA_PYTHON_CLIENT_MEM_FRACTION'] = '0.1'
-os.environ['CUDA_VISIBLE_DEVICES'] = '2'
+#os.environ['XLA_PYTHON_CLIENT_MEM_FRACTION'] = '0.01'
+os.environ['CUDA_VISIBLE_DEVICES'] = '0'
 #os.environ['XLA_FLAGS'] = '--xla_gpu_enable_tracing'
 #os.environ['JAX_PLATFORMS'] = 'cpu'
 import jax
@@ -12,7 +12,7 @@ import jax
 from scipy.special import comb
 import time
 
-from tcnqs.fcidump import read_2_spin_orbital_seprated as read2
+
 from tcnqs.utils import generate_ci_data, build_ham_from_pyscf
 import tcnqs.backflow as bf
 import tcnqs.trainer as trainer
@@ -319,6 +319,74 @@ def test_backflow_batched(mol,n_core,num_epochs=2400, test=False ,random_key=17 
         #jax.profiler.stop_trace()
    
     if test:
+        #assert jnp.absolute(train_losses_bf[-1]-fci_e_pyscf) < 5e-3
+        print("Success: Model trained successfully")
+    
+    return train_losses_bf, fci_e_pyscf
+
+def test_electron_backflow(mol,n_core,num_epochs=2400, test=False ,random_key=17 ):
+    if test:
+        jax.config.update("jax_enable_x64", True)
+        jax.config.update("jax_debug_nans", True)
+    rng = random.PRNGKey(random_key)
+    myhf = mol.RHF().run()
+    cisolver = pyscf.fci.FCI(myhf)
+    fci_e_pyscf, ci_vector=cisolver.kernel()
+    cisolver = pyscf.fci.FCI(myhf)
+    print("E FCI = ", fci_e_pyscf)
+ 
+    hamiltonian = build_ham_from_pyscf(mol, myhf)
+    
+    
+    num_orbitals = hamiltonian.n_orb
+
+
+    model_bf, variables_bf = bf.create_model_electron_bf(rng, input_shape = num_orbitals, 
+                                            num_alpha_electron= hamiltonian.n_elec_a,
+                                            num_beta_electron= hamiltonian.n_elec_b,
+                                            hidden_layer_sizes=t.hidden_layer_sizes, activation='tanh',n_bf_dets=t.n_bf_dets)
+    state_bf =trainer.create_train_state(rng, model_bf, variables_bf)
+    
+    train_losses_bf = []
+
+    n_s_orb = (hamiltonian.n_orb//2)
+    n_total_dets = comb(n_s_orb, hamiltonian.n_elec_a,exact=True)*comb(n_s_orb, hamiltonian.n_elec_b ,exact=True)
+    
+    if n_core > n_total_dets:
+        n_core = n_total_dets
+        print(f"Warning: n_core specified is greater than total determinants in hilbert space. Falling back to n_core ={n_total_dets}")
+
+    max_n_full= n_core*(1 + comb(hamiltonian.n_elec_a,2, exact=True)*
+                        comb(n_s_orb-hamiltonian.n_elec_a,2,exact=True)+comb(hamiltonian.n_elec_b,2, 
+                        exact=True)*comb(n_s_orb-hamiltonian.n_elec_b,2,exact=True)
+                        + hamiltonian.n_elec_a*hamiltonian.n_elec_b*(n_s_orb-hamiltonian.n_elec_a)
+                        *(n_s_orb-hamiltonian.n_elec_b) + n_s_orb*(hamiltonian.n_elec_a+hamiltonian.n_elec_b)
+                        - hamiltonian.n_elec_a**2 - hamiltonian.n_elec_b**2) 
+    
+    n_connected =  jnp.minimum(n_total_dets, max_n_full) - n_core
+    
+    sampler = FSSC(n_core, int(n_connected) ,hamiltonian.n_elec_a, hamiltonian.n_elec_b, num_orbitals)
+    sampler = sampler.initialize()
+    stored = sampler.next_sample_stored(hamiltonian)
+    flag = True
+    #stored = trainer.sample_ham_wrap(sample,hamiltonian,sampler)
+    #sample = sample[0][:sampler.n_core]
+    for epoch in range(num_epochs):
+        
+        #epoch_loss_bf = 0.0
+        #a=time.time()
+        state_bf, loss_bf, sampler, flag, stored = trainer.train_step_fssc(state_bf, hamiltonian, sampler, flag, stored)
+        # relevant_indices = jnp.where(jnp.logical_not(jnp.all(sample[0]==jnp.zeros(num_orbitals),axis=1)))[0]
+        # sample =(sample[0][relevant_indices],sample[1][relevant_indices]) 
+        #b=time.time()
+        #epoch_loss_bf += loss_bf
+        #average_epoch_loss_bf = epoch_loss_bf # / (num_samples // batch_size)
+        train_losses_bf.append(loss_bf + hamiltonian.e_core)
+        
+        print(f"Epoch {epoch+1} , Loss_bf: {loss_bf + hamiltonian.e_core},{flag}")
+        #jax.profiler.stop_trace()
+   
+    if test:
         assert jnp.absolute(train_losses_bf[-1]-fci_e_pyscf) < 5e-3
         print("Success: Model trained successfully")
     
@@ -333,7 +401,9 @@ if __name__ == '__main__':
     #test_backflow_connected(mol, 17, )#test= True)
     start = time.time()
     #jax.profiler.start_trace("tmp/jax-trace",create_perfetto_link=True)
-    test_backflow_batched(mol,n_core=t.n_core, test= True, random_key=17, num_epochs=t.num_epochs)
+    #test_backflow_unsupervised(mol, random_key=15,test= True, num_epochs=t.num_epochs)
+    #test_backflow_fssc(mol,n_core=t.n_core, test= True, random_key=15, num_epochs=t.num_epochs)
+    test_electron_backflow(mol,n_core=t.n_core, test= True, random_key=15, num_epochs=t.num_epochs)
     #jax.profiler.stop_trace()
     end = time.time()
     print("Time taken: ", end-start)
