@@ -179,18 +179,18 @@ def energy(params,sample,ham_stored,state,sampler):
     
     unique_full,idx = sample
     Ci = state.apply_fn({'params': params},unique_full)
-    
+    #Norm = jnp.linalg.norm(Ci)
     next_sample_idx = jnp.argsort(jnp.abs(Ci),descending =True)[:sampler.n_core]
     Ci = Ci[idx]
     ci_core, ci_connected = Ci[:sampler.n_core], Ci[sampler.n_core:].reshape(sampler.n_core,-1)
-    Norm = jnp.linalg.norm(Ci)
+    Norm = jnp.linalg.norm(ci_core)
     e = jnp.dot(ci_core,jnp.einsum('ij,ij->i', ham_stored,ci_connected))/Norm**2
     
     new_sample_core = unique_full[next_sample_idx]
 
     return e,new_sample_core
 
-@partial(jax.jit)
+#@partial(jax.jit)
 def new_state(state, sample ,ham_stored,sampler):
     #jax.grad = jax.grad(energy) only in first input
     energy_sample ,grads = jax.value_and_grad(energy, argnums=0, has_aux = True)(state.params, sample, ham_stored, state, sampler)
@@ -213,40 +213,100 @@ def train_step_fssc(state , hamiltonain, sampler, flag, stored_tuple):
     return state, loss, sampler, flag, (sample,ham_stored)
 
 
-def energy_batched(params,hamiltonian,state,sampler,batch_size):
-    batches = sampler.core_space.reshape(-1,batch_size,sampler.n_spac_orb)
-    def energy_batch(carry, batch):
-        sample_new,numerator,denominator = carry 
+# def energy_batch(params,hamiltonian,state,sampler,batch_size):
+#     batches = sampler.core_space.reshape(-1,batch_size,sampler.n_spac_orb)
+#     def energy_batch(carry, batch):
+#         sample_new,numerator,denominator = carry 
 
-        batch_full, ham_stored= sampler.next_sample_stored_batch(batch,hamiltonian)
+#         batch_full, ham_stored= sampler.next_sample_stored_batch(batch,hamiltonian)
  
-        unique_full,idx = batch_full
-        Ci = state.apply_fn({'params': params},unique_full)
-        #next_sample_idx = jnp.argsort(jnp.abs(Ci),descending =True)[:sampler.n_core]
+#         unique_full,idx = batch_full
+#         ci = state.apply_fn({'params': params},unique_full)
+#         #next_sample_idx = jnp.argsort(jnp.abs(Ci),descending =True)[:sampler.n_core]
         
-        Ci = Ci[idx]
-        #reshape into batchsize multiples
-        ci_core, ci_connected = Ci[:batch.shape[0]], Ci[batch.shape[0]:].reshape(batch.shape[0],-1)
-        denominator += jnp.linalg.norm(ci_core)**2
-        numerator += jnp.dot(ci_core,jnp.einsum('ij,ij->i', ham_stored,ci_connected))
+#         Ci = ci[idx]
+#         #reshape into batchsize multiples
+#         ci_core, ci_connected = Ci[:batch.shape[0]], Ci[batch.shape[0]:].reshape(batch.shape[0],-1)
+#         denominator += jnp.linalg.norm(ci_core)**2
+#         numerator += jnp.dot(ci_core,jnp.einsum('ij,ij->i', ham_stored,ci_connected))
         
-        next_sample_idx = jnp.argsort(jnp.concatenate([sample_new[1], Ci]), descending=True)[:sampler.n_core]
-        sample_new = (jnp.concatenate([sample_new[0], unique_full])[next_sample_idx], 
-                  jnp.concatenate([sample_new[1], Ci])[next_sample_idx])
-        carry = (sample_new,numerator,denominator)
-        return (carry, None)
-    carry_init = ((jnp.zeros((sampler.n_core,sampler.n_spac_orb),dtype=jnp.uint8),jnp.zeros(sampler.n_core,dtype=jnp.float64)), 0.0 , 0.0)
-    final_carry,_ = jax.lax.scan(energy_batch,carry_init, batches)
-    energy = final_carry[1]/final_carry[2]
-    sample_new = final_carry[0]
-    return energy, sample_new
 
+#         ## ERROR: The next_sample_idx is not unique for each batch
+#         next_sample_idx = jnp.argsort(jnp.concatenate([sample_new[1], ci]), descending=True)[:sampler.n_core]
+#         sample_new = (jnp.concatenate([sample_new[0], unique_full])[next_sample_idx], 
+#                   jnp.concatenate([sample_new[1], ci])[next_sample_idx])
+#         carry = (sample_new,numerator,denominator)
+#         ## 
+        
+#         return (carry, None)
+#     carry_init = ((jnp.zeros((sampler.n_core,sampler.n_spac_orb),dtype=jnp.uint8),jnp.zeros(sampler.n_core,dtype=jnp.float64)), 0.0 , 0.0)
+#     final_carry,_ = jax.lax.scan(energy_batch,carry_init, batches)
+#     energy = final_carry[1]/final_carry[2] #(final_carry[1],final_carry[2])
+#     sample_new = final_carry[0]
+#     return energy, sample_new
+
+def f1(batch, hamiltonian, sampler):
+    return sampler.next_sample_stored_batch(batch,hamiltonian)
+
+
+def f2(params, carry ,state, stored, batch, sampler):
+    
+    ## needs to be updated
+    value, sample_new, grads = carry
+    numerator, denominator = value
+
+    batch_full, ham_stored = stored
+    unique_full,idx = batch_full
+    ci = state.apply_fn({'params': params},unique_full)
+    #next_sample_idx = jnp.argsort(jnp.abs(Ci),descending =True)[:sampler.n_core]
+    
+    Ci = ci[idx]
+    #reshape into batchsize multiples
+    ci_core, ci_connected = Ci[:batch.shape[0]], Ci[batch.shape[0]:].reshape(batch.shape[0],-1)
+    denominator += jnp.linalg.norm(ci_core)**2
+    numerator += jnp.dot(ci_core,jnp.einsum('ij,ij->i', ham_stored,ci_connected))
+    
+
+    ## ERROR: The next_sample_idx is not unique for each batch
+    next_sample_idx = jnp.argsort(jnp.concatenate([sample_new[1], ci]), descending=True)[:sampler.n_core]
+    sample_new = (jnp.concatenate([sample_new[0], unique_full])[next_sample_idx], 
+                jnp.concatenate([sample_new[1], ci])[next_sample_idx])
+    # carry = (sample_new,numerator,denominator)
+    return (numerator,denominator),sample_new
+
+
+
+@partial(jax.jit, static_argnums=(3))
 def train_step_batched(state, hamiltonian: Hamiltonian, sampler : FSSC, batch_size :int):
     #jax.grad = jax.grad(energy) only in first input
-    aux ,grads = jax.value_and_grad(energy_batched, argnums=0, has_aux = True)(state.params, hamiltonian ,state, sampler,batch_size)
-    new_state = state.apply_gradients(grads=grads)
-    sampler = sampler.update_core_space(aux[1])
-    return new_state , aux[0], sampler ## energy , New sample 
+    
+    def f3(carry, batch):
+        stored = f1(batch, hamiltonian, sampler)
+        # Jax grad only in the first input of f2
+        # f2_grad = jax.grad(f2, argnums=0) 
+        
+        # take gradient wrt individual inputs seprately
+        aux, grads = jax.value_and_grad(f2, argnums=0, has_aux = True)(state.params, carry ,state, stored,batch,sampler)
+        # grads, aux_sample = jax.jacrev(f2,has_aux=True, argnums=0)(state.params, carry ,state, stored,batch,sampler)
+        # aux = f2(state.params, carry ,state, stored, batch, sampler)
+
+        grads = jax.tree_map(lambda x,y: x+y, grads, carry[2])
+        carry = (aux[0],aux[1],grads)
+        # transform x to the carry form
+        return carry,None
+    #carry_init = ((jnp.zeros((sampler.n_core,sampler.n_spac_orb),dtype=jnp.uint8),jnp.zeros(sampler.n_core,dtype=jnp.float64)), 0.0 , 0.0)
+    # initiailize carry with tree structure
+    init_grads = (jax.tree_map(lambda x: jnp.zeros_like(x), state.params),jax.tree_map(lambda x: jnp.zeros_like(x), state.params))
+    carry_init = (0.0,0.0), (jnp.zeros_like(sampler.core_space),jnp.zeros(sampler.n_core,dtype=jnp.float64)), init_grads
+    batches = sampler.core_space.reshape(-1,batch_size,sampler.n_spac_orb)
+    final_carry,_= jax.lax.scan(f3,carry_init,batches)
+    value, sample_new, grads = final_carry
+    # get grads from final carry
+    # aux ,grads = jax.value_and_grad(energy_batched, argnums=0, has_aux = True)(state.params, hamiltonian ,state, sampler,batch_size)
+    overall_grads = jax.tree_map(lambda grads_0,grads_1: (value[1]*grads_0 - value[0]*grads_1)/value[1]**2, grads[0],grads[1])
+    new_state = state.apply_gradients(grads=overall_grads)
+    sampler = sampler.update_core_space(sample_new[0])
+    return new_state , value[0]/value[1] , sampler ## energy , New sample 
 
 
 def create_train_state(rng, model, variables):
