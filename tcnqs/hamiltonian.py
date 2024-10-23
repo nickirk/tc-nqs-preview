@@ -21,7 +21,7 @@ class Hamiltonian:
         self.g2e = g2e
         self.e_core = e_core
         
-        self.sorted_g2e, self.sorted_inds = self.setup_hci()
+        self.max_g2e, self.sorted_g2e, self.sorted_inds = self.setup_hci()
 
     def tree_flatten(self):
     # Return the dynamic fields and static fields separately
@@ -139,6 +139,8 @@ class Hamiltonian:
         _, results = jax.lax.scan(sort_elements, carry, pairs)
 
         sorted_elements, sorted_indices = results
+        # get the maximum stored elements using the first column of sorted_elements
+        max_element = jnp.max(jnp.abs(sorted_elements[:, 0]))
 
 
-        return sorted_elements, sorted_indices
+        return max_element, sorted_elements, sorted_indices
