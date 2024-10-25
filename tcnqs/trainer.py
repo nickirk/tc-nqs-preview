@@ -160,7 +160,7 @@ def _train_step_fssc_old(state, last_sample, Hamiltonain, sampler):
     def loss_fn(params):
         loss , sample = hamiltonian_loss(params, last_sample, Hamiltonain, sampler)
         return loss
-
+    # loss_fn = lambda params: hamiltonian_loss(params, last_sample, Hamiltonain, sampler)[0]
     grads = jax.grad(loss_fn)(state.params)
     # put nan to 0
     #grads = jax.tree_map(lambda x: jnp.where(jnp.isnan(x), 0., x), grads)
@@ -245,32 +245,34 @@ def train_step_fssc(state , hamiltonain, sampler, flag, stored_tuple):
 #     sample_new = final_carry[0]
 #     return energy, sample_new
 
-def f1(batch, hamiltonian, sampler):
-    return sampler.next_sample_stored_batch(batch,hamiltonian)
 
-
-def f2(params, carry ,state, stored, batch, sampler):
+def batched_energy(params, carry ,state, stored, batch, sampler):
     
     ## needs to be updated
-    value, sample_new, grads = carry
-    numerator, denominator = value
+    sample = carry[0]
+    #numerator, denominator = value
 
     batch_full, ham_stored = stored
     unique_full,idx = batch_full
-    ci = state.apply_fn({'params': params},unique_full)
+    ci_unique = state.apply_fn({'params': params},unique_full)
     #next_sample_idx = jnp.argsort(jnp.abs(Ci),descending =True)[:sampler.n_core]
     
-    Ci = ci[idx]
+    ci_reconstructed = ci_unique[idx]
     #reshape into batchsize multiples
-    ci_core, ci_connected = Ci[:batch.shape[0]], Ci[batch.shape[0]:].reshape(batch.shape[0],-1)
-    denominator += jnp.linalg.norm(ci_core)**2
-    numerator += jnp.dot(ci_core,jnp.einsum('ij,ij->i', ham_stored,ci_connected))
+    ci_core, ci_connected = ci_reconstructed[:batch.shape[0]], ci_reconstructed[batch.shape[0]:].reshape(batch.shape[0],-1)
+    denominator = jnp.linalg.norm(ci_core)**2
+    numerator = jnp.dot(ci_core,jnp.einsum('ij,ij->i', ham_stored,ci_connected))
     
-
+    max_indices = jnp.argsort(jnp.abs(ci_unique),descending =True)[:sampler.n_core]
     ## ERROR: The next_sample_idx is not unique for each batch
-    next_sample_idx = jnp.argsort(jnp.concatenate([sample_new[1], ci]), descending=True)[:sampler.n_core]
-    sample_new = (jnp.concatenate([sample_new[0], unique_full])[next_sample_idx], 
-                jnp.concatenate([sample_new[1], ci])[next_sample_idx])
+    combined_sample_space =  jnp.concatenate([sample[0], unique_full[max_indices]]) 
+    ci_combined = jnp.concatenate([sample[1], ci_unique[max_indices]])
+    next_sample_idx = jnp.argsort(jnp.abs(ci_combined), descending=True)[:sampler.n_core]
+    sample_new = (combined_sample_space[next_sample_idx], ci_combined[next_sample_idx])
+    # next_sample_idx = jnp.argsort(jnp.concatenate([sample_new[1], ci_unique]), descending=True)[:sampler.n_core]
+    # sample_new = (jnp.concatenate([sample_new[0], unique_full])[next_sample_idx], 
+                # jnp.concatenate([sample_new[1], ci_unique])[next_sample_idx])
+
     # carry = (sample_new,numerator,denominator)
     return (numerator,denominator),sample_new
 
@@ -279,34 +281,38 @@ def f2(params, carry ,state, stored, batch, sampler):
 @partial(jax.jit, static_argnums=(3))
 def train_step_batched(state, hamiltonian: Hamiltonian, sampler : FSSC, batch_size :int):
     #jax.grad = jax.grad(energy) only in first input
-    
-    def f3(carry, batch):
-        stored = f1(batch, hamiltonian, sampler)
+
+    def batched_value_and_grad(carry, batch):
+        stored = sampler.next_sample_stored_batch(batch,hamiltonian)
         # Jax grad only in the first input of f2
         # f2_grad = jax.grad(f2, argnums=0) 
         
         # take gradient wrt individual inputs seprately
-        aux, grads = jax.value_and_grad(f2, argnums=0, has_aux = True)(state.params, carry ,state, stored,batch,sampler)
+        f2_params = lambda params: batched_energy(params, carry, state, stored, batch, sampler)
+        eval , grad_fn, sample = jax.vjp(f2_params, state.params ,has_aux = True)
         # grads, aux_sample = jax.jacrev(f2,has_aux=True, argnums=0)(state.params, carry ,state, stored,batch,sampler)
         # aux = f2(state.params, carry ,state, stored, batch, sampler)
-
-        grads = jax.tree_map(lambda x,y: x+y, grads, carry[2])
-        carry = (aux[0],aux[1],grads)
+        grads = (grad_fn((1.,0.))[0],grad_fn((0.,1.))[0])
+        grads = jax.tree_map(lambda x,y: x+y, grads, carry[1])
+        carry = (sample, grads)
         # transform x to the carry form
-        return carry,None
-    #carry_init = ((jnp.zeros((sampler.n_core,sampler.n_spac_orb),dtype=jnp.uint8),jnp.zeros(sampler.n_core,dtype=jnp.float64)), 0.0 , 0.0)
+        return carry, eval
+
+    # carry_init = ((jnp.zeros((sampler.n_core,sampler.n_spac_orb),dtype=jnp.uint8),jnp.zeros(sampler.n_core,dtype=jnp.float64)), 0.0 , 0.0)
     # initiailize carry with tree structure
     init_grads = (jax.tree_map(lambda x: jnp.zeros_like(x), state.params),jax.tree_map(lambda x: jnp.zeros_like(x), state.params))
-    carry_init = (0.0,0.0), (jnp.zeros_like(sampler.core_space),jnp.zeros(sampler.n_core,dtype=jnp.float64)), init_grads
+    carry_init = (jnp.zeros_like(sampler.core_space),jnp.zeros(sampler.n_core,dtype=jnp.float64)), init_grads
     batches = sampler.core_space.reshape(-1,batch_size,sampler.n_spac_orb)
-    final_carry,_= jax.lax.scan(f3,carry_init,batches)
-    value, sample_new, grads = final_carry
+    final_carry, eval= jax.lax.scan(batched_value_and_grad,carry_init,batches)
+    sample_new, grads = final_carry
+     
+    value = jax.tree_map(lambda x: jnp.sum(x), eval)
     # get grads from final carry
     # aux ,grads = jax.value_and_grad(energy_batched, argnums=0, has_aux = True)(state.params, hamiltonian ,state, sampler,batch_size)
     overall_grads = jax.tree_map(lambda grads_0,grads_1: (value[1]*grads_0 - value[0]*grads_1)/value[1]**2, grads[0],grads[1])
     new_state = state.apply_gradients(grads=overall_grads)
     sampler = sampler.update_core_space(sample_new[0])
-    return new_state , value[0]/value[1] , sampler ## energy , New sample 
+    return new_state , value[0]/value[1] , sampler        ## energy , new_sample 
 
 
 def create_train_state(rng, model, variables):

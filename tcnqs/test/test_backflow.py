@@ -1,5 +1,5 @@
 import os
-#os.environ['XLA_PYTHON_CLIENT_MEM_FRACTION'] = '0.01'
+# os.environ['XLA_PYTHON_CLIENT_MEM_FRACTION'] = '0.01'
 os.environ['CUDA_VISIBLE_DEVICES'] = '0'
 #os.environ['XLA_FLAGS'] = '--xla_gpu_enable_tracing'
 #os.environ['JAX_PLATFORMS'] = 'cpu'
@@ -319,7 +319,7 @@ def test_backflow_batched(mol,n_core,num_epochs=2400, test=False ,random_key=17 
         #jax.profiler.stop_trace()
    
     if test:
-        #assert jnp.absolute(train_losses_bf[-1]-fci_e_pyscf) < 5e-3
+        assert jnp.absolute(train_losses_bf[-1]-fci_e_pyscf) < 5e-3
         print("Success: Model trained successfully")
     
     return train_losses_bf, fci_e_pyscf
@@ -403,7 +403,8 @@ if __name__ == '__main__':
     #jax.profiler.start_trace("tmp/jax-trace",create_perfetto_link=True)
     #test_backflow_unsupervised(mol, random_key=15,test= True, num_epochs=t.num_epochs)
     #test_backflow_fssc(mol,n_core=t.n_core, test= True, random_key=15, num_epochs=t.num_epochs)
-    test_electron_backflow(mol,n_core=t.n_core, test= True, random_key=15, num_epochs=t.num_epochs)
+    test_backflow_batched(mol,n_core=t.n_core, test= True, random_key=15, num_epochs=t.num_epochs)
+    #test_electron_backflow(mol,n_core=t.n_core, test= True, random_key=15, num_epochs=t.num_epochs)
     #jax.profiler.stop_trace()
     end = time.time()
     print("Time taken: ", end-start)
