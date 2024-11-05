@@ -479,40 +479,7 @@ if __name__ == '__main__':
     start = time.time()
     #jax.profiler.start_trace("tmp/jax-trace",create_perfetto_link=True)
     #test_backflow_unsupervised(mol, random_key=15,test= True, num_epochs=t.num_epochs)
-    #test_backflow_fssc(mol,n_core=t.n_core, test= True, random_key=15, num_epochs=t.num_epochs)
-    train_losses_vite, fci_e_pyscf=test_backflow_vite(mol,n_core=t.n_core, test= True, random_key=15, num_epochs=t.num_epochs)
-    # jnp.save("tcnqs/LiH_vite.npy",train_losses_vite)
-    # jnp.save("tcnqs/LiH_fci.npy",fci_e_pyscf)
-
-
-    # train_losses_fssc, fci_e_pyscf=test_backflow_fssc(mol,n_core=t.n_core, test= True, random_key=15, num_epochs=t.num_epochs)
-    
-    # plt.figure(figsize=(8, 6))
-    
-    # # Plot final energies from the simulation for current bond length
-    # plt.plot(jnp.arange(len(train_losses_fssc)), train_losses_fssc - fci_e_pyscf, label='Reighleigh Ritz')
-    
-    # plt.plot(jnp.arange(len(train_losses_vite)), train_losses_vite - fci_e_pyscf, label='VITE')
-    
-    # # Plot HF and CCSD energies as horizontal lines
-    # #plt.axhline(y=jnp.asarray(hf_energies[i]) - fci_energies[i], color='g', label='HF')
-    # #plt.axhline(y=jnp.asarray(ccsd_energies[i]) - fci_energies[i], color='r', label='CCSD')
-    
-    # # Add labels and legend
-    # plt.xlabel('Epochs')
-    # plt.ylabel('Energy difference (E-FCI)')
-    # plt.title(f'Energy Convergence for LiH Molecule')
-    # plt.legend()
-    # plt.yscale('log')
-    
-    # # Add grid
-    # plt.grid(True)
-    # #plt.ylim(-0.001, 0.01)
-    # # Save plot with unique filename for each bond length
-    # plt.savefig(f"tcnqs/test.png")
-    
-
-
+    test_backflow_fssc(mol,n_core=t.n_core, test= True, random_key=15, num_epochs=t.num_epochs)
     #test_electron_backflow(mol,n_core=t.n_core, test= True, random_key=15, num_epochs=t.num_epochs)
     #jax.profiler.stop_trace()
     end = time.time()

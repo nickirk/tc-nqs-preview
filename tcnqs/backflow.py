@@ -72,7 +72,7 @@ def create_model(rng, input_shape, num_electrons, hidden_layer_sizes=[4],
     return model, variables
 
 
-class electron_backflow(nn.Module):
+class Electron_Backflow(nn.Module):
 
     num_orbital: int
     num_electron: int
@@ -123,14 +123,14 @@ class electron_backflow(nn.Module):
         #x = jnp.linalg.vecdot( self.bf_det_params ,x, axis=0)
         # sgn, val = jnp.linalg.slogdet(x)
         # x = sgn * jnp.exp(val)
-        x = jnp.linalg.det(x)
+        x = jnp.linalg.det(x[:, :self.num_alpha_electron, :self.num_alpha_electron]) * jnp.linalg.det(x[:, self.num_alpha_electron:, self.num_alpha_electron:])
         x = jnp.dot(x,self.bf_det_params)[0]
         return jax.lax.select(jnp.sum(selected_config)==0, 0.0,jnp.float64(x))
 
 def create_model_electron_bf(rng, input_shape, num_alpha_electron, num_beta_electron, hidden_layer_sizes=[4],    
                  activation='relu', n_bf_dets = 1): 
     num_electrons = num_alpha_electron + num_beta_electron
-    model = electron_backflow(num_orbital=input_shape, num_electron=num_electrons, 
+    model = Electron_Backflow(num_orbital=input_shape, num_electron=num_electrons, 
                      num_alpha_electron = num_alpha_electron,
                      num_beta_electron = num_beta_electron,
                      n_bf_dets= n_bf_dets,
