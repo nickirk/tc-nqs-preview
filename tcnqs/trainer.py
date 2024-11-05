@@ -163,7 +163,7 @@ def _train_step_fssc_old(state, last_sample, Hamiltonain, sampler):
     # loss_fn = lambda params: hamiltonian_loss(params, last_sample, Hamiltonain, sampler)[0]
     grads = jax.grad(loss_fn)(state.params)
     # put nan to 0
-    #grads = jax.tree_map(lambda x: jnp.where(jnp.isnan(x), 0., x), grads)
+    #grads = jax.tree.map(lambda x: jnp.where(jnp.isnan(x), 0., x), grads)
     loss, new_sample = hamiltonian_loss(state.params, last_sample, Hamiltonain, sampler)
     
     state = state.apply_gradients(grads=grads)
@@ -188,8 +188,9 @@ def energy(params,sample,ham_stored,state,sampler):
     
     new_sample_core = unique_full[next_sample_idx]
 
-    return e,new_sample_core
-
+    #return e,new_sample_core
+    ## Try: numerator and denominator seprately 
+    return e, new_sample_core
 #@partial(jax.jit)
 def new_state(state, sample ,ham_stored,sampler):
     #jax.grad = jax.grad(energy) only in first input
@@ -212,7 +213,7 @@ def train_step_fssc(state , hamiltonain, sampler, flag, stored_tuple):
     flag = jnp.all(jnp.unique(sample_core,axis =0,size = sampler.n_core)==jnp.unique(sampler.core_space,axis = 0,size = sampler.n_core))
     return state, loss, sampler, flag, (sample,ham_stored)
 
-
+# OLD FUNCTION
 # def energy_batch(params,hamiltonian,state,sampler,batch_size):
 #     batches = sampler.core_space.reshape(-1,batch_size,sampler.n_spac_orb)
 #     def energy_batch(carry, batch):
@@ -264,24 +265,20 @@ def batched_energy(params, carry ,state, stored, batch, sampler):
     numerator = jnp.dot(ci_core,jnp.einsum('ij,ij->i', ham_stored,ci_connected))
     
     max_indices = jnp.argsort(jnp.abs(ci_unique),descending =True)[:sampler.n_core]
-    ## ERROR: The next_sample_idx is not unique for each batch
+    
     combined_sample_space =  jnp.concatenate([sample[0], unique_full[max_indices]]) 
     ci_combined = jnp.concatenate([sample[1], ci_unique[max_indices]])
     next_sample_idx = jnp.argsort(jnp.abs(ci_combined), descending=True)[:sampler.n_core]
     sample_new = (combined_sample_space[next_sample_idx], ci_combined[next_sample_idx])
-    # next_sample_idx = jnp.argsort(jnp.concatenate([sample_new[1], ci_unique]), descending=True)[:sampler.n_core]
-    # sample_new = (jnp.concatenate([sample_new[0], unique_full])[next_sample_idx], 
-                # jnp.concatenate([sample_new[1], ci_unique])[next_sample_idx])
-
-    # carry = (sample_new,numerator,denominator)
+   
     return (numerator,denominator),sample_new
 
 
 
-@partial(jax.jit, static_argnums=(3))
-def train_step_batched(state, hamiltonian: Hamiltonian, sampler : FSSC, batch_size :int):
+@jax.jit
+def train_step_batched(state, hamiltonian: Hamiltonian, sampler : FSSC):
     #jax.grad = jax.grad(energy) only in first input
-
+    
     def batched_value_and_grad(carry, batch):
         stored = sampler.next_sample_stored_batch(batch,hamiltonian)
         # Jax grad only in the first input of f2
@@ -293,23 +290,25 @@ def train_step_batched(state, hamiltonian: Hamiltonian, sampler : FSSC, batch_si
         # grads, aux_sample = jax.jacrev(f2,has_aux=True, argnums=0)(state.params, carry ,state, stored,batch,sampler)
         # aux = f2(state.params, carry ,state, stored, batch, sampler)
         grads = (grad_fn((1.,0.))[0],grad_fn((0.,1.))[0])
-        grads = jax.tree_map(lambda x,y: x+y, grads, carry[1])
+        grads = jax.tree.map(lambda x,y: x+y, grads, carry[1])
+        #jax.debug.breakpoint()
+        # jax.debug.print("grads ={grads}",grads=grads)
         carry = (sample, grads)
         # transform x to the carry form
         return carry, eval
 
     # carry_init = ((jnp.zeros((sampler.n_core,sampler.n_spac_orb),dtype=jnp.uint8),jnp.zeros(sampler.n_core,dtype=jnp.float64)), 0.0 , 0.0)
     # initiailize carry with tree structure
-    init_grads = (jax.tree_map(lambda x: jnp.zeros_like(x), state.params),jax.tree_map(lambda x: jnp.zeros_like(x), state.params))
+    init_grads = (jax.tree.map(lambda x: jnp.zeros_like(x), state.params),jax.tree.map(lambda x: jnp.zeros_like(x), state.params))
     carry_init = (jnp.zeros_like(sampler.core_space),jnp.zeros(sampler.n_core,dtype=jnp.float64)), init_grads
-    batches = sampler.core_space.reshape(-1,batch_size,sampler.n_spac_orb)
+    batches = sampler.core_space.reshape(-1,sampler.n_batch,sampler.n_spac_orb)
     final_carry, eval= jax.lax.scan(batched_value_and_grad,carry_init,batches)
     sample_new, grads = final_carry
      
-    value = jax.tree_map(lambda x: jnp.sum(x), eval)
+    value = jax.tree.map(lambda x: jnp.sum(x), eval)
     # get grads from final carry
     # aux ,grads = jax.value_and_grad(energy_batched, argnums=0, has_aux = True)(state.params, hamiltonian ,state, sampler,batch_size)
-    overall_grads = jax.tree_map(lambda grads_0,grads_1: (value[1]*grads_0 - value[0]*grads_1)/value[1]**2, grads[0],grads[1])
+    overall_grads = jax.tree.map(lambda grads_0,grads_1: (value[1]*grads_0 - value[0]*grads_1)/value[1]**2, grads[0],grads[1])
     new_state = state.apply_gradients(grads=overall_grads)
     sampler = sampler.update_core_space(sample_new[0])
     return new_state , value[0]/value[1] , sampler        ## energy , new_sample 

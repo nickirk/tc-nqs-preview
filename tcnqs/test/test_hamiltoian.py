@@ -31,9 +31,9 @@ def test_hamiltonian(mol, test=False):
         for j in range(len(x_train)):
             H[i,j]=ham(x_train[i], x_train[j])
     if test:            
-        fci_e_diagonal = np.sort(np.linalg.eig(H)[0])[0] + ham.e_core
+        fci_e_diagonal = np.sort(np.linalg.eig(H)[0])[0] #+ ham.e_core
         
-        e_hf=H[0,0]+ham.e_core
+        e_hf=H[0,0]#+ham.e_core
         print(fci_e_diagonal, fci_e_pyscf) 
         assert jnp.absolute(myhf.e_tot- e_hf) < 1e-6
         print("Success: HF energies match!")

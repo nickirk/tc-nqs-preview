@@ -35,7 +35,7 @@ class Backflow(nn.Module):
         self.dense_general = nn.DenseGeneral(
             features=(self.n_bf_dets,self.num_orbital, self.num_electron), dtype=jnp.float64
             )
-        self.bf_det_params = self.param('bf_det_params', nn.initializers.lecun_normal(), (self.n_bf_dets,1))
+        self.bf_det_params = self.param('bf_det_params', nn.initializers.lecun_normal(dtype=jnp.float64), (self.n_bf_dets,1))
         
         
 
@@ -56,16 +56,16 @@ class Backflow(nn.Module):
         x = jnp.dot(x,self.bf_det_params)[0]
         return jax.lax.select(jnp.sum(selected_config)==0, 0.0,jnp.float64(x))
 
-def positive_random_init(key, shape, dtype=jnp.float32):
-    return random.uniform(key, shape, dtype, minval=0, maxval=0.2)
+def positive_random_init(key, shape, dtype=jnp.float64):
+    return random.uniform(key, shape, dtype, minval=1.0, maxval=1.1)
 
 def create_model(rng, input_shape, num_electrons, hidden_layer_sizes=[4],    
                  activation='relu', n_bf_dets = 1): 
     model = Backflow(num_orbital=input_shape, num_electron=num_electrons,  n_bf_dets= n_bf_dets,
                      hidden_layer_sizes=hidden_layer_sizes,
                      activation=activation)
-    initial=jnp.concatenate((jnp.ones(num_electrons),
-                            jnp.zeros(input_shape-num_electrons)),
+    initial=jnp.concatenate((jnp.ones(num_electrons,dtype=jnp.uint8),
+                            jnp.zeros(input_shape-num_electrons,dtype=jnp.uint8)),
                             axis=0)
     initial=jnp.reshape(initial,(1,input_shape))
     variables = model.init(rng,initial)#initializer=normal 

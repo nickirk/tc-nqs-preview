@@ -43,7 +43,7 @@ class Hamiltonian:
     def __call__(self, det1, det2):
         det1 = jnp.asarray(det1, dtype=jnp.int8)
         det2 = jnp.asarray(det2, dtype=jnp.int8)
-        return self._get_1body(det1, det2)  + self._get_2body(det1, det2)
+        return self._get_1body(det1, det2)  + self._get_2body(det1, det2) 
     
     # Update: This is not an isssue!
     # Potential Issue: Only for even number of electrons in the alpha and beta seprated orbitals both
@@ -58,7 +58,7 @@ class Hamiltonian:
 
         def diff_0():
             sum_indices = jnp.where(det1 == 1, size=self.n_elec)[0]
-            return jnp.sum(self.h1g[sum_indices, sum_indices])
+            return jnp.sum(self.h1g[sum_indices, sum_indices]) + self.e_core
 
         def diff_2():
             diff_index = jnp.nonzero(diff, size=2)[0]

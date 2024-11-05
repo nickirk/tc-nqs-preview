@@ -1,6 +1,6 @@
 import os
-# os.environ['XLA_PYTHON_CLIENT_MEM_FRACTION'] = '0.01'
-os.environ['CUDA_VISIBLE_DEVICES'] = '0'
+os.environ['XLA_PYTHON_CLIENT_MEM_FRACTION'] = '0.02'
+os.environ['CUDA_VISIBLE_DEVICES'] = '1'
 #os.environ['XLA_FLAGS'] = '--xla_gpu_enable_tracing'
 #os.environ['JAX_PLATFORMS'] = 'cpu'
 import jax
@@ -121,9 +121,9 @@ def test_backflow_unsupervised(mol, random_key, num_epochs=2400, test = False):
             epoch_loss_bf += loss_bf
         
         average_epoch_loss_bf = epoch_loss_bf / (num_samples // batch_size)
-        train_losses_bf.append(average_epoch_loss_bf + hamiltonian.e_core)
+        train_losses_bf.append(average_epoch_loss_bf )
         
-        print(f"Epoch {epoch+1} , Loss_bf: {average_epoch_loss_bf+ hamiltonian.e_core}")
+        print(f"Epoch {epoch+1} , Loss_bf: {average_epoch_loss_bf}")
     
     # print(FCI_e_pyscf, jnp.average(jnp.array(train_losses_bf[-50:],dtype=jnp.float32)))
     if test:
@@ -177,9 +177,9 @@ def test_backflow_connected(mol, random_key , num_epochs=2400, test=False):
         epoch_loss_bf += loss_bf
         
         average_epoch_loss_bf = epoch_loss_bf # / (num_samples // batch_size)
-        train_losses_bf.append(average_epoch_loss_bf + hamiltonian.e_core)
+        train_losses_bf.append(average_epoch_loss_bf )
         
-        print(f"Epoch {epoch+1} , Loss_bf: {average_epoch_loss_bf + hamiltonian.e_core}")
+        print(f"Epoch {epoch+1} , Loss_bf: {average_epoch_loss_bf }")
     
     # print(FCI_e_pyscf, jnp.average(jnp.array(train_losses_bf[-50:],dtype=jnp.float32)))
     if test:
@@ -228,7 +228,7 @@ def test_backflow_fssc(mol,n_core,num_epochs=2400, test=False ,random_key=17 ):
     
     n_connected =  jnp.minimum(n_total_dets, max_n_full) - n_core
     
-    sampler = FSSC(n_core, int(n_connected) ,hamiltonian.n_elec_a, hamiltonian.n_elec_b, num_orbitals)
+    sampler = FSSC(n_core, int(n_connected) ,hamiltonian.n_elec_a, hamiltonian.n_elec_b, num_orbitals,n_batch=n_core)
     sampler = sampler.initialize()
     stored = sampler.next_sample_stored(hamiltonian)
     flag = True
@@ -244,9 +244,9 @@ def test_backflow_fssc(mol,n_core,num_epochs=2400, test=False ,random_key=17 ):
         #b=time.time()
         #epoch_loss_bf += loss_bf
         #average_epoch_loss_bf = epoch_loss_bf # / (num_samples // batch_size)
-        train_losses_bf.append(loss_bf + hamiltonian.e_core)
+        train_losses_bf.append(loss_bf )
         
-        print(f"Epoch {epoch+1} , Loss_bf: {loss_bf + hamiltonian.e_core},{flag}")
+        print(f"Epoch {epoch+1} , Loss_bf: {loss_bf },{flag}")
         #jax.profiler.stop_trace()
    
     if test:
@@ -275,30 +275,37 @@ def test_backflow_batched(mol,n_core,num_epochs=2400, test=False ,random_key=17 
     model_bf, variables_bf = bf.create_model(rng, input_shape = num_orbitals, 
                                             num_electrons= hamiltonian.n_elec,
                                             hidden_layer_sizes=t.hidden_layer_sizes, activation='tanh',n_bf_dets=t.n_bf_dets)
-    state_bf =trainer.create_train_state(rng, model_bf, variables_bf)
+    variables_bf = jax.tree.map(lambda x: x.astype(jnp.float64), variables_bf)
+    state_bf = trainer.create_train_state(rng, model_bf, variables_bf)
     
     train_losses_bf = []
 
     n_s_orb = (hamiltonian.n_orb//2)
     n_total_dets = comb(n_s_orb, hamiltonian.n_elec_a,exact=True)*comb(n_s_orb, hamiltonian.n_elec_b ,exact=True)
+    batch_size = t.batch_size
     
     if n_core > n_total_dets:
         n_core = n_total_dets
         print(f"Warning: n_core specified is greater than total determinants in hilbert space. Falling back to n_core ={n_total_dets}")
-    if n_core % t.batch_size != 0:
+    if n_core < batch_size:
+        batch_size =n_core
+        print(f"Warning: n_core specified is less than batch_size. Falling back to batch_size ={batch_size}")
+    if n_core % batch_size != 0:
         n_core = n_core - n_core % t.batch_size
         print(f"Warning: n_core specified is not a multiple of batch_size. Falling back to n_core ={n_core}")
 
-    max_n_full= n_core*(1 + comb(hamiltonian.n_elec_a,2, exact=True)*
+    n_connections= (1 + comb(hamiltonian.n_elec_a,2, exact=True)*
                         comb(n_s_orb-hamiltonian.n_elec_a,2,exact=True)+comb(hamiltonian.n_elec_b,2, 
                         exact=True)*comb(n_s_orb-hamiltonian.n_elec_b,2,exact=True)
                         + hamiltonian.n_elec_a*hamiltonian.n_elec_b*(n_s_orb-hamiltonian.n_elec_a)
                         *(n_s_orb-hamiltonian.n_elec_b) + n_s_orb*(hamiltonian.n_elec_a+hamiltonian.n_elec_b)
                         - hamiltonian.n_elec_a**2 - hamiltonian.n_elec_b**2) 
     
-    n_connected =  jnp.minimum(n_total_dets, max_n_full) - n_core
-    
-    sampler = FSSC(n_core, int(n_connected) ,hamiltonian.n_elec_a, hamiltonian.n_elec_b, num_orbitals)
+    max_n_full= n_core*n_connections
+    n_connected =  30000 #jnp.minimum(n_total_dets, max_n_full) - n_core
+    n_full = n_total_dets
+    #unique fn min of (n_total_dets, n_batch*n_connections) 
+    sampler = FSSC(n_core, int(n_connected) ,hamiltonian.n_elec_a, hamiltonian.n_elec_b, num_orbitals, n_batch=batch_size)
     sampler = sampler.initialize()
    
     #stored = trainer.sample_ham_wrap(sample,hamiltonian,sampler)
@@ -307,15 +314,15 @@ def test_backflow_batched(mol,n_core,num_epochs=2400, test=False ,random_key=17 
         
         #epoch_loss_bf = 0.0
         #a=time.time()
-        state_bf, loss_bf, sampler = trainer.train_step_batched(state_bf, hamiltonian, sampler,t.batch_size)
+        state_bf, loss_bf, sampler = trainer.train_step_batched(state_bf, hamiltonian, sampler)
         # relevant_indices = jnp.where(jnp.logical_not(jnp.all(sample[0]==jnp.zeros(num_orbitals),axis=1)))[0]
         # sample =(sample[0][relevant_indices],sample[1][relevant_indices]) 
         #b=time.time()
         #epoch_loss_bf += loss_bf
         #average_epoch_loss_bf = epoch_loss_bf # / (num_samples // batch_size)
-        train_losses_bf.append(loss_bf + hamiltonian.e_core)
+        train_losses_bf.append(loss_bf)
         
-        print(f"Epoch {epoch+1} , Loss_bf: {loss_bf + hamiltonian.e_core}")
+        print(f"Epoch {epoch+1} , Loss_bf: {loss_bf }")
         #jax.profiler.stop_trace()
    
     if test:
@@ -365,7 +372,7 @@ def test_electron_backflow(mol,n_core,num_epochs=2400, test=False ,random_key=17
     
     n_connected =  jnp.minimum(n_total_dets, max_n_full) - n_core
     
-    sampler = FSSC(n_core, int(n_connected) ,hamiltonian.n_elec_a, hamiltonian.n_elec_b, num_orbitals)
+    sampler = FSSC(n_core, int(n_connected) ,hamiltonian.n_elec_a, hamiltonian.n_elec_b, num_orbitals,n_batch=n_core)
     sampler = sampler.initialize()
     stored = sampler.next_sample_stored(hamiltonian)
     flag = True
@@ -381,9 +388,9 @@ def test_electron_backflow(mol,n_core,num_epochs=2400, test=False ,random_key=17
         #b=time.time()
         #epoch_loss_bf += loss_bf
         #average_epoch_loss_bf = epoch_loss_bf # / (num_samples // batch_size)
-        train_losses_bf.append(loss_bf + hamiltonian.e_core)
+        train_losses_bf.append(loss_bf )
         
-        print(f"Epoch {epoch+1} , Loss_bf: {loss_bf + hamiltonian.e_core},{flag}")
+        print(f"Epoch {epoch+1} , Loss_bf: {loss_bf },{flag}")
         #jax.profiler.stop_trace()
    
     if test:

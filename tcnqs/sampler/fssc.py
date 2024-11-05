@@ -12,13 +12,20 @@ import time
 
 @register_pytree_node_class
 class FSSC(Sampler):
-    def __init__(self, n_core, n_connected ,n_elec_a, n_elec_b, n_spac_orb) -> None:
+    def __init__(self, n_core: int, n_connected:int ,n_elec_a :int, n_elec_b:int, n_spac_orb:int, n_batch:int) -> None:
+    # TODO: n_connected = number of connnections to be made
+    # change the meaning for n_connected everywhere in code
+    # change n_full to mean the max possible slater determinants
+    
+    # TODO: jax unique less than batchsize*connections
 
         self.n_core = n_core
         self.n_connected = n_connected
         self.n_elec_a = n_elec_a
         self.n_elec_b = n_elec_b
         self.n_spac_orb = n_spac_orb
+        
+        self.n_batch = n_batch
         self.n_full = self.n_core + self.n_connected
 
         # self.hamiltonain = hamiltonain
@@ -26,16 +33,18 @@ class FSSC(Sampler):
         # self.ham_stored = self.next_sample_stored(self.sample_core,hamiltonain)
     
 
-    # Jit doesnt give any real advantage as the function is called only once!
-    @jax.jit   
+   
+    #@jax.jit   
     def initialize(self): # -> tuple[jnp.ndarray, jnp.ndarray]:
         alpha = jnp.concatenate((jnp.ones(self.n_elec_a),jnp.zeros(int(self.n_spac_orb/2)-self.n_elec_a)), dtype=jnp.uint8)
         beta = jnp.concatenate((jnp.ones(self.n_elec_b),jnp.zeros(int(self.n_spac_orb/2)-self.n_elec_b)), dtype=jnp.uint8)
         hartree_fock = jnp.concatenate((alpha,beta))
         cisd_space = generate_connected_space(hartree_fock, self.n_elec_a, self.n_elec_b)
         
-        ## TODO: Add functionality to keep going untill maximum has reached
+        
+        ## ADDED: Add functionality to keep going untill maximum has reached
         ## USE: jax.lax.while
+        
         def generate_core_space(core_space):
             # Assumption: Jax will return padding as the 0th element when taking jnp.unique 
             # padding == jnp.zeros(self.n_spac_orb)
@@ -43,10 +52,12 @@ class FSSC(Sampler):
             connections = jnp.reshape(connections,(-1, self.n_spac_orb))
             #core_space = jnp.concatenate((core_space,connections))
             core_space = jnp.unique(connections,axis = 0,size=self.n_core+1,fill_value=jnp.zeros(self.n_spac_orb))
+            
+            # 1st element is padding because of the lexicographic sort(jnp.unique)
             return core_space[1:]
         
         init_value = jnp.unique(cisd_space,axis = 0,size=self.n_core,fill_value=jnp.zeros(self.n_spac_orb))
-        core_space = jax.lax.while_loop(lambda core_space:jnp.all(core_space[-1]==jnp.zeros(self.n_spac_orb)),generate_core_space,init_value)
+        core_space = jax.lax.while_loop(lambda core_space:jnp.all(core_space[-1]==jnp.zeros_like(core_space[-1])),generate_core_space,init_value)
         # core_space = self._vmap_generate_connected_space(cisd_space[1:])
         # core_space = jnp.reshape(core_space,(-1, self.n_spac_orb))
         # core_space = jnp.unique(core_space,axis=0,size=self.n_core ,fill_value=jnp.zeros(self.n_spac_orb))
@@ -89,6 +100,7 @@ class FSSC(Sampler):
         
         connected_space = self._vmap_generate_connected_space(sample_core)
         full_space = jnp.concatenate((sample_core,connected_space.reshape(-1,self.n_spac_orb)),axis=0)
+
         unique_full, idx = jnp.unique(full_space,axis=0, size = self.n_full, return_inverse=True
                                         ,fill_value=jnp.zeros(self.n_spac_orb))
         return unique_full,idx
@@ -133,14 +145,14 @@ class FSSC(Sampler):
     def tree_flatten(self):
         # Return the dynamic fields and static fields separately
         dynamic = (self.core_space,)  # Include any fields that should be transformed with jax (for example, mutable arrays)
-        static = (self.n_core, self.n_connected, self.n_elec_a, self.n_elec_b, self.n_spac_orb,self.n_full)
+        static = (self.n_core, self.n_connected, self.n_elec_a, self.n_elec_b, self.n_spac_orb,self.n_batch,self.n_full)
         return dynamic, static
 
     @classmethod
     def tree_unflatten(cls, static, dynamic):
         # Reconstruct the class with static fields, dynamic can be ignored if empty
-        instance = cls(*static[:5])
-        instance.n_full = static[5]
+        instance = cls(*static[:-1])
+        instance.n_full = static[-1]
         instance.core_space = dynamic[0]
         #instance.ham_stored = dynamic[1]
         return instance
