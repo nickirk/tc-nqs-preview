@@ -45,8 +45,6 @@ class Hamiltonian:
         det2 = jnp.asarray(det2, dtype=jnp.int8)
         return self._get_1body(det1, det2)  + self._get_2body(det1, det2) 
     
-    # Update: This is not an isssue!
-    # Potential Issue: Only for even number of electrons in the alpha and beta seprated orbitals both
     def phase(self,det,j):
         sum_result = jnp.sum(jnp.where(jnp.arange(self.n_orb) < j, det, 0))
         return 1 - 2 * (sum_result % 2)
