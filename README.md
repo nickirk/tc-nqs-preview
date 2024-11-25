@@ -25,3 +25,6 @@ nvidia-cusolver-cu12         11.4.5.107\
 nvidia-cusparse-cu12         12.2.0.103\
 nvidia-nccl-cu12             2.19.3\
 nvidia-nvjitlink-cu12        12.3.101\
+
+
+Some simple TC Hamiltonians can be obtained here: https://github.com/dobrautz/tc-varqite-hamiltonians
