@@ -5,10 +5,7 @@ from jax import random
 from typing import List
 from dataclasses import field
 from functools import partial
-from jax.nn.initializers import normal
-from functools import partial
 
-from tcnqs.sampler.connected_dets import generate_connected_space
 ## using float 64 for the determinant to solve the bug temporarily
 jax.config.update("jax_enable_x64", True)
 class Backflow(nn.Module):
@@ -144,38 +141,3 @@ def create_model_electron_bf(rng, input_shape, num_alpha_electron, num_beta_elec
     initial=jnp.reshape(initial,(1,input_shape))
     variables = model.init(rng,initial)#initializer=normal 
     return model, variables
-
-# @jax.jit(device=jax.devices('cpu')[0])
-# def det(x):
-#     # sgn, val = jnp.linalg.slogdet(x)
-#     # x = sgn * jnp.exp(val)
-#     x = jnp.linalg.det(x)
-#     return x
-    
-
-# jax.debug.breakpoint()
-##x = jnp.sum(x)
-# x = x + x.T
-
-#x = jax.jit(jnp.linalg.det,device=jax.devices('cpu')[0])(x)
-
-#x = jnp.average(x) 
-
-# trim away inf values in val and replace them with 0
-# val = jnp.where(jnp.isinf(val), 0, val)
-#logmax = jnp.max(val)
-
-#print(x)
-# jax.debug.breakpoint()
-#x = self.dense_general(x)
-#x = x[selected_config , :]
-#x = jnp.sum(x)# sgn, val = jnp.linalg.slogdet(x)
-# x = sgn * jnp.exp(val)
-# x = jnp.linalg.det(x)
-
-### Slogdet is not a good option as the sgn it provides is discontinous
-### This creats a problem in the gradient calculation 
-
-#sgn, val = jnp.linalg.slogdet(x)
-# x = sgn * jnp.exp(val)
-# x = jax.lax.select(val>-5,jnp.float64(sgn * jnp.exp(val)),0.0)
