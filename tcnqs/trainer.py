@@ -340,7 +340,7 @@ def train_step_VITE(state, hamiltonian: Hamiltonian, sampler : FSSC):
 
     #jax.debug.breakpoint()
 
-    Aij =  Jacobian.T @ Jacobian  + 1e-4*jnp.diag(jnp.ones(Jacobian.shape[1]))  #Jacobian.T @ Jacobian # 
+    Aij =  100*Jacobian.T @ Jacobian  + 1e-4*jnp.diag(jnp.ones(Jacobian.shape[1]))  #Jacobian.T @ Jacobian # 
     #inverse_Aij = jnp.linalg.inv(Aij, hermitian=True)
     
     ## Calculate B_i
@@ -363,7 +363,7 @@ def train_step_VITE(state, hamiltonian: Hamiltonian, sampler : FSSC):
 
     ## Update parameters- calculate grads and update
     _, unravel_fn = jax.flatten_util.ravel_pytree(state.params)
-    grads = jax.scipy.sparse.linalg.cg(Aij,B_i)[0] #jnp.dot(inverse_Aij,B_i)
+    grads = jax.scipy.sparse.linalg.cg(Aij,100*B_i)[0] #jnp.dot(inverse_Aij,B_i)
     grads = unravel_fn(grads)
     # take care of negative sign in the update
     # try with and without adam

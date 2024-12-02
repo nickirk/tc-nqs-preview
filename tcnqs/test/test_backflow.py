@@ -1,5 +1,5 @@
 import os
-#os.environ['XLA_PYTHON_CLIENT_MEM_FRACTION'] = '0.5'
+os.environ['XLA_PYTHON_CLIENT_MEM_FRACTION'] = '0.5'
 #os.environ['CUDA_VISIBLE_DEVICES'] = '1'
 #os.environ['XLA_FLAGS'] = '--xla_gpu_enable_tracing'
 #os.environ['JAX_PLATFORMS'] = 'cpu'
@@ -303,7 +303,7 @@ def test_backflow_batched(mol,n_core,num_epochs=2400, test=False ,random_key=17 
                         - hamiltonian.n_elec_a**2 - hamiltonian.n_elec_b**2) 
     
     max_n_full= n_core*n_connections
-    n_connected =  30000 #jnp.minimum(n_total_dets, max_n_full) - n_core
+    n_connected = 0 #30000 #jnp.minimum(n_total_dets, max_n_full) - n_core
     n_full = n_total_dets
     #unique fn min of (n_total_dets, n_batch*n_connections) 
     sampler = FSSC(n_core, int(n_connected) ,hamiltonian.n_elec_a, hamiltonian.n_elec_b, num_orbitals, n_batch=batch_size)
@@ -400,7 +400,6 @@ def test_electron_backflow(mol,n_core,num_epochs=2400, test=False ,random_key=17
     
     return train_losses_bf, fci_e_pyscf
 
-
 def test_backflow_vite(mol,n_core,num_epochs=2400, test=False ,random_key=17 ):
     if test:
         jax.config.update("jax_enable_x64", True)
@@ -448,7 +447,7 @@ def test_backflow_vite(mol,n_core,num_epochs=2400, test=False ,random_key=17 ):
                         - hamiltonian.n_elec_a**2 - hamiltonian.n_elec_b**2) 
     
     max_n_full= n_core*n_connections
-    n_connected =  30000 #jnp.minimum(n_total_dets, max_n_full) - n_core
+    n_connected =  jnp.minimum(n_total_dets, max_n_full) - n_core
     n_full = n_total_dets
     #unique fn min of (n_total_dets, n_batch*n_connections) 
     sampler = FSSC(n_core, int(n_connected) ,hamiltonian.n_elec_a, hamiltonian.n_elec_b, num_orbitals, n_batch=batch_size)
@@ -482,8 +481,8 @@ if __name__ == '__main__':
     #test_backflow_unsupervised(mol, random_key=15,test= True, num_epochs=t.num_epochs)
     #test_backflow_fssc(mol,n_core=t.n_core, test= True, random_key=15, num_epochs=t.num_epochs)
     train_losses_vite, fci_e_pyscf=test_backflow_vite(mol,n_core=t.n_core, test= True, random_key=15, num_epochs=t.num_epochs)
-    jnp.save("tcnqs/LiH_vite.npy",train_losses_vite)
-    jnp.save("tcnqs/LiH_fci.npy",fci_e_pyscf)
+    # jnp.save("tcnqs/LiH_vite.npy",train_losses_vite)
+    # jnp.save("tcnqs/LiH_fci.npy",fci_e_pyscf)
 
 
     # train_losses_fssc, fci_e_pyscf=test_backflow_fssc(mol,n_core=t.n_core, test= True, random_key=15, num_epochs=t.num_epochs)
