@@ -92,6 +92,6 @@ if __name__ == '__main__':
     mol = t.mol
     print(jax.devices())
     start = time.time()
-    test_backflow_connected(mol, 17, test= True)
+    test_backflow_vite(mol, 17, test= True)
     end = time.time()
     print("Time taken: ", end-start)
