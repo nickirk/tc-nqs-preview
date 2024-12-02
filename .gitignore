@@ -1,6 +1,12 @@
 # Local notes
-notes/*.ipynb
 /tcnqs/simulations/
+tc-nqs.ipynb
+data/
+fcidump*
+notes/*ipynb
+.DS_Store
+
+>>>>>>> 09789bf (add some local ignore)
 *.pkl
 # Byte-compiled / optimized / DLL files
 __pycache__/
