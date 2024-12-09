@@ -325,10 +325,16 @@ def train_step_VITE(state, hamiltonian: Hamiltonian, sampler : FSSC):
         tuple: A tuple containing the updated state, the energy and the updated sampler.
     """
     
-
+    def apply_fn_params(params,core_space):
+        ci_core = state.apply_fn({'params': params},core_space)
+        norm = jnp.linalg.norm(ci_core)
+        ci_core = ci_core/ norm
+        return ci_core, norm
+    
     ## Calculate inverse A_ij
-    apply_fn_params = lambda params: state.apply_fn({'params': params}, sampler.core_space)
-    Jacobian = jax.jacrev(apply_fn_params,argnums=0)(state.params)
+    #apply_fn_params = lambda params: state.apply_fn({'params': params}, sampler.core_space)
+    
+    Jacobian, norm = jax.jacrev(apply_fn_params,argnums=0,has_aux=True)(state.params,sampler.core_space)
     #jax.debug.breakpoint()
 
     # Jacobian, _ = jax.flatten_util.ravel_pytree(Jacobian)
@@ -340,7 +346,7 @@ def train_step_VITE(state, hamiltonian: Hamiltonian, sampler : FSSC):
 
     #jax.debug.breakpoint()
 
-    Aij =  100*Jacobian.T @ Jacobian  + 1e-4*jnp.diag(jnp.ones(Jacobian.shape[1]))  #Jacobian.T @ Jacobian # 
+    Aij =  Jacobian.T @ Jacobian   + 1e-7*jnp.diag(jnp.ones(Jacobian.shape[1]))  #Jacobian.T @ Jacobian # 
     #inverse_Aij = jnp.linalg.inv(Aij, hermitian=True)
     
     ## Calculate B_i
@@ -348,7 +354,7 @@ def train_step_VITE(state, hamiltonian: Hamiltonian, sampler : FSSC):
     # j - core space , k - connecected space
     sample , H_ij = sampler.next_sample_stored(hamiltonian)
     unique_full , idx = sample
-    Ci = state.apply_fn({'params': state.params},unique_full)
+    Ci = state.apply_fn({'params': state.params},unique_full)/norm
     ci_core, ci_connected = Ci[idx][:sampler.n_core], Ci[idx][sampler.n_core:].reshape(sampler.n_core,-1)
     H_Psi = jnp.einsum('ij,ij->i', H_ij,ci_connected)
     B_i = jnp.dot(Jacobian.T, H_Psi)
@@ -363,16 +369,81 @@ def train_step_VITE(state, hamiltonian: Hamiltonian, sampler : FSSC):
 
     ## Update parameters- calculate grads and update
     _, unravel_fn = jax.flatten_util.ravel_pytree(state.params)
-    grads = jax.scipy.sparse.linalg.cg(Aij,100*B_i)[0] #jnp.dot(inverse_Aij,B_i)
+    grads = jax.scipy.sparse.linalg.cg(Aij,B_i)[0] #jnp.dot(inverse_Aij,B_i)
     grads = unravel_fn(grads)
     # take care of negative sign in the update
     # try with and without adam
-    #grads = jax.tree_map(lambda x: -x, grads)
+    # grads = jax.tree_map(lambda x: -x, grads)
     state = state.apply_gradients(grads=grads)
 
 
     return state, energy, sampler   
 
+# @jax.jit
+# def train_step_VITE_normalized(state, hamiltonian: Hamiltonian, sampler : FSSC):
+#     """
+#     Perform a single training step for the Variational Imaginary Time Evolution (VITE) algorithm.
+#     Args:
+#         state: The current state of the model, including parameters and apply function.
+#         hamiltonian (Hamiltonian): The Hamiltonian of the system being simulated.
+#         sampler (FSSC): The sampler used to generate samples from the quantum state.
+#     Returns:
+#         tuple: A tuple containing the updated state, the energy and the updated sampler.
+#     """
+    
+#     def apply_fn_params(params,core_space):
+#         ci_core = state.apply_fn({'params': params},core_space)
+#         norm = jnp.linalg.norm(ci_core)
+#         ci_core = ci_core/ norm
+#         return ci_core, norm
+    
+#     ## Calculate inverse A_ij
+#     #apply_fn_params = lambda params: state.apply_fn({'params': params}, sampler.core_space)
+    
+#     Jacobian, norm = jax.jacrev(apply_fn_params,argnums=0,has_aux=True)(state.params,sampler.core_space)
+#     #jax.debug.breakpoint()
+
+#     # Jacobian, _ = jax.flatten_util.ravel_pytree(Jacobian)
+#     # Jacobian = Jacobian.reshape((-1, sampler.n_core)) #(-1,sampler.n_core)
+#     Jacobian = jax.tree_map(lambda x: jnp.reshape(x,(sampler.n_core,-1)),Jacobian)
+#     Jacobian = jax.tree.flatten(Jacobian)[0]
+#     #jax.debug.breakpoint()
+#     Jacobian = jnp.concatenate(Jacobian ,axis= 1)
+
+#     #jax.debug.breakpoint()
+
+#     Aij =  Jacobian.T @ Jacobian   + 1e-2*jnp.diag(jnp.ones(Jacobian.shape[1]))  #Jacobian.T @ Jacobian # 
+#     #inverse_Aij = jnp.linalg.inv(Aij, hermitian=True)
+    
+#     ## Calculate B_i
+#     # B_i = dC_j/dtheta_i * H_jk * C_k
+#     # j - core space , k - connecected space
+#     sample , H_ij = sampler.next_sample_stored(hamiltonian)
+#     unique_full , idx = sample
+#     Ci = state.apply_fn({'params': state.params},unique_full)/norm
+#     ci_core, ci_connected = Ci[idx][:sampler.n_core], Ci[idx][sampler.n_core:].reshape(sampler.n_core,-1)
+#     H_Psi = jnp.einsum('ij,ij->i', H_ij,ci_connected)
+#     B_i = jnp.dot(Jacobian.T, H_Psi)
+    
+#     ## Calculate energy and update core space
+#     next_sample_idx = jnp.argsort(jnp.abs(Ci),descending =True)[:sampler.n_core]
+#     Norm = jnp.linalg.norm(ci_core)
+#     energy = jnp.dot(ci_core,H_Psi)/Norm**2
+#     new_sample_core = unique_full[next_sample_idx]
+#     sampler = sampler.update_core_space(new_sample_core)
+
+
+#     ## Update parameters- calculate grads and update
+#     _, unravel_fn = jax.flatten_util.ravel_pytree(state.params)
+#     grads = jax.scipy.sparse.linalg.cg(Aij,B_i)[0] #jnp.dot(inverse_Aij,B_i)
+#     grads = unravel_fn(grads)
+#     # take care of negative sign in the update
+#     # try with and without adam
+#     # grads = jax.tree_map(lambda x: -x, grads)
+#     state = state.apply_gradients(grads=grads)
+
+
+#     return state, energy, sampler 
 
 # Without ADAM
 def create_train_state_VITE(rng, model, variables):
