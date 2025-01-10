@@ -346,7 +346,8 @@ def train_step_VITE(state, hamiltonian: Hamiltonian, sampler : FSSC):
 
     #jax.debug.breakpoint()
 
-    Aij =  Jacobian.T @ Jacobian   + 1e-7*jnp.diag(jnp.ones(Jacobian.shape[1]))  #Jacobian.T @ Jacobian # 
+    Aij_save =  Jacobian.T @ Jacobian  
+    Aij= Aij_save + 1e-7*jnp.diag(jnp.ones(Jacobian.shape[1]))  #Jacobian.T @ Jacobian # 
     #inverse_Aij = jnp.linalg.inv(Aij, hermitian=True)
     
     ## Calculate B_i
@@ -377,7 +378,7 @@ def train_step_VITE(state, hamiltonian: Hamiltonian, sampler : FSSC):
     state = state.apply_gradients(grads=grads)
 
 
-    return state, energy, sampler   
+    return state, energy, sampler, Aij_save 
 
 # @jax.jit
 # def train_step_VITE_normalized(state, hamiltonian: Hamiltonian, sampler : FSSC):
