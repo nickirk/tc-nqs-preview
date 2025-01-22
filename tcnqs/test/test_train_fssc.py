@@ -1,6 +1,6 @@
 import os
 os.environ['XLA_PYTHON_CLIENT_MEM_FRACTION'] = '0.4'
-os.environ['CUDA_VISIBLE_DEVICES'] = '9'
+os.environ['CUDA_VISIBLE_DEVICES'] = '2'
 #os.environ['XLA_FLAGS'] = '--xla_gpu_enable_tracing'
 #os.environ['JAX_PLATFORMS'] = 'cpu'
 import jax
@@ -62,15 +62,15 @@ def test_backflow_fssc(mol, n_core, num_epochs=2400, test=False ,random_key=17):
     sampler = FSSC(n_core, int(n_connected), hamiltonian.n_elec_a, 
                    hamiltonian.n_elec_b, num_orbitals,n_batch=n_core)
     sampler = sampler.initialize()
-    stored = sampler.next_sample_stored(hamiltonian)
-    flag = True
+    # stored = sampler.next_sample_stored(hamiltonian)
+    # flag = True
     for epoch in range(num_epochs):
         
-        state_bf, loss_bf, sampler, flag, stored = trainer.train_step_fssc(
-            state_bf, hamiltonian, sampler, flag, stored)
-        train_losses_bf.append(loss_bf )
+        state_bf, loss_bf, sampler = trainer.train_step_variational_comparison(
+            state_bf, hamiltonian, sampler) # , flag, stored_tuple
+        train_losses_bf.append(loss_bf)
         
-        print(f"Epoch {epoch+1} , Loss_bf: {loss_bf },{flag}")
+        print(f"Epoch {epoch+1} , Loss_bf: {loss_bf }")#,{flag}
    
     # if test:
     #     assert jnp.absolute(train_losses_bf[-1]-fci_e_pyscf) < 5e-3

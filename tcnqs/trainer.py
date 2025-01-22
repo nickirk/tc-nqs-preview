@@ -201,17 +201,56 @@ def new_state(state, sample ,ham_stored,sampler):
 
 # @partial(jax.jit,static_argnums=(4))
 @jax.jit
-def train_step_fssc(state , hamiltonain, sampler, flag, stored_tuple):
-    sample_core = sampler.core_space
-    def sample_ham_stored():
-        return sampler.next_sample_stored(hamiltonain)
+def train_step_fssc(state , hamiltonian, sampler ): #, flag, stored_tuple
+    # sample_core = sampler.core_space
+    # def sample_ham_stored():
+    #     return sampler.next_sample_stored(hamiltonian)
 
-    sample , ham_stored = jax.lax.cond(flag,lambda :stored_tuple,sample_ham_stored)
- 
+    #sample , ham_stored = jax.lax.cond(flag,lambda :stored_tuple,sample_ham_stored)
+    sample ,ham_stored = sampler.next_sample_stored(hamiltonian)
     state , loss, sampler = new_state(state,sample,ham_stored,sampler)
     
-    flag = jnp.all(jnp.unique(sample_core,axis =0,size = sampler.n_core)==jnp.unique(sampler.core_space,axis = 0,size = sampler.n_core))
-    return state, loss, sampler, flag, (sample,ham_stored)
+    # flag = jnp.all(jnp.unique(sample_core,axis =0,size = sampler.n_core)==jnp.unique(sampler.core_space,axis = 0,size = sampler.n_core))
+    return state, loss, sampler#, flag, (sample,ham_stored)
+
+@jax.jit
+def train_step_variational_comparison(state, hamiltonian :Hamiltonian, sampler: FSSC):
+    sample,ham_stored = sampler.next_sample_stored(hamiltonian)
+    unique_full,idx = sample
+    Ci = state.apply_fn({'params': state.params},unique_full)
+    #Norm = jnp.linalg.norm(Ci)
+    next_sample_idx = jnp.argsort(jnp.abs(Ci),descending =True)[:sampler.n_core]
+    Ci = Ci[idx]
+    ci_core, ci_connected = Ci[:sampler.n_core], Ci[sampler.n_core:].reshape(sampler.n_core,-1)
+    Norm = jnp.linalg.norm(ci_core)
+    e_loc = jnp.einsum('ij,ij->i', ham_stored,ci_connected)
+    energy = jnp.dot(ci_core,e_loc)/Norm**2
+    ### Energy Calculation CHECKED!
+
+
+    ## take grads only of core space inputs
+    apply_fn_params = lambda params: state.apply_fn({'params': params}, sampler.core_space)
+    jacobian = jax.jacrev(apply_fn_params)(state.params)
+    #jacobian = jax.tree_map(lambda x: jnp.reshape(x,(sampler.n_core,-1)).T,jacobian)
+    ## Contract this jacobian using eloc and e
+
+
+    # Check the calculation of gradients
+    
+    jacobian = jax.tree_map(lambda x: jnp.reshape(x,(sampler.n_core,-1)),jacobian)
+    jacobian = jax.tree.flatten(jacobian)[0]
+    jacobian = jnp.concatenate(jacobian , axis= 1)
+    _, unravel_fn = jax.flatten_util.ravel_pytree(state.params)
+    ### Gradient Calculation CHECKED!
+    #dot_prod_mapped = jax.tree_map(lambda x,y: jnp.dot(x,y))
+    
+    grads = 2*jnp.dot(jacobian.T,e_loc)/Norm**2 - 2*energy*jnp.dot(jacobian.T,ci_core)/Norm**2
+    
+    grads = unravel_fn(grads)
+    state = state.apply_gradients(grads=grads)
+    sampler = sampler.update_core_space(unique_full[next_sample_idx])
+
+    return state, energy, sampler
 
 # OLD FUNCTION
 # def energy_batch(params,hamiltonian,state,sampler,batch_size):
@@ -332,10 +371,10 @@ def train_step_VITE(state, hamiltonian: Hamiltonian, sampler : FSSC):
         return ci_core, norm
     
     ## Calculate inverse A_ij
-    #apply_fn_params = lambda params: state.apply_fn({'params': params}, sampler.core_space)
+    # apply_fn_params = lambda params: state.apply_fn({'params': params}, sampler.core_space)
     
     Jacobian, norm = jax.jacrev(apply_fn_params,argnums=0,has_aux=True)(state.params,sampler.core_space)
-    #jax.debug.breakpoint()
+    # jax.debug.breakpoint()
 
     # Jacobian, _ = jax.flatten_util.ravel_pytree(Jacobian)
     # Jacobian = Jacobian.reshape((-1, sampler.n_core)) #(-1,sampler.n_core)
