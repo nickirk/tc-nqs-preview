@@ -1,6 +1,6 @@
 import os
-os.environ['XLA_PYTHON_CLIENT_MEM_FRACTION'] = '0.4'
-os.environ['CUDA_VISIBLE_DEVICES'] = '0'
+os.environ['XLA_PYTHON_CLIENT_MEM_FRACTION'] = '0.3'
+os.environ['CUDA_VISIBLE_DEVICES'] = '7'
 #os.environ['XLA_FLAGS'] = '--xla_gpu_enable_tracing'
 #os.environ['JAX_PLATFORMS'] = 'cpu'
 import jax
@@ -74,20 +74,19 @@ def test_backflow_vite(mol,n_core,num_epochs=2400, test=False ,random_key=17 ):
     svd_save = []
     for epoch in range(num_epochs):
         
-      
-        state_bf, loss_bf, sampler ,A_ij = trainer.train_step_VITE(state_bf, hamiltonian, sampler)
-        
-        if epoch % 1000 == 0:
-            svd = jax.jit(lambda x : jnp.linalg.svd(x , compute_uv=False,hermitian=True))(A_ij)
-            svd = jnp.abs(svd)
-            svd_index = jnp.argsort(svd)
-            svd_save.append(svd[svd_index]/ jnp.max(svd))
+        state_bf, loss_bf, sampler  = trainer.train_step_VITE_efficient(state_bf, hamiltonian, sampler)
+        #,A_ij
+        # if epoch % 1000 == 0:
+        #     svd = jax.jit(lambda x : jnp.linalg.svd(x , compute_uv=False,hermitian=True))(A_ij)
+        #     svd = jnp.abs(svd)
+        #     svd_index = jnp.argsort(svd)
+        #     svd_save.append(svd[svd_index]/ jnp.max(svd))
             
         train_losses_bf.append(loss_bf)
         
-        print(f"Epoch {epoch+1} , Loss_bf: {loss_bf }")
+        print(f"Epoch: {epoch+1}, Loss_bf: {loss_bf}")
    
-    jnp.save(f"tcnqs/simulations/svd_Aij_{mol.atom_symbol(0)+mol.atom_symbol(1)}_lr={t.learning_rate}_ncore={t.n_core}.npy",jnp.array(svd_save))
+    # jnp.save(f"tcnqs/simulations/svd_Aij_{mol.atom_symbol(0)+mol.atom_symbol(1)}_lr={t.learning_rate}_ncore={t.n_core}.npy",jnp.array(svd_save))
     # if test:
     #     assert jnp.absolute(train_losses_bf[-1]-fci_e_pyscf) < 5e-3
     #     print("Success: Model trained successfully")
@@ -98,7 +97,7 @@ if __name__ == '__main__':
     mol = t.mol
     print(jax.devices())
     start = time.time()
-    losses , fci_e_pyscf = test_backflow_vite(mol , n_core=t.n_core,num_epochs=t.num_epochs, test= True)
+    losses , fci_e_pyscf = test_backflow_vite(mol , random_key=15,n_core=t.n_core,num_epochs=t.num_epochs, test= True)
     jnp.save(f"tcnqs/simulations/vite_{mol.atom_symbol(0)+mol.atom_symbol(1)}_lr={t.learning_rate}_ncore={t.n_core}.npy",jnp.array(losses))
     jnp.save(f"tcnqs/simulations/fci_{mol.atom_symbol(0)+mol.atom_symbol(1)}.npy",jnp.array(fci_e_pyscf))
     end = time.time()

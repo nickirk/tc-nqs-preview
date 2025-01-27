@@ -1,6 +1,6 @@
 import os
-os.environ['XLA_PYTHON_CLIENT_MEM_FRACTION'] = '0.4'
-os.environ['CUDA_VISIBLE_DEVICES'] = '2'
+os.environ['XLA_PYTHON_CLIENT_MEM_FRACTION'] = '0.01'
+os.environ['CUDA_VISIBLE_DEVICES'] = '0'
 #os.environ['XLA_FLAGS'] = '--xla_gpu_enable_tracing'
 #os.environ['JAX_PLATFORMS'] = 'cpu'
 import jax
@@ -66,7 +66,7 @@ def test_backflow_fssc(mol, n_core, num_epochs=2400, test=False ,random_key=17):
     # flag = True
     for epoch in range(num_epochs):
         
-        state_bf, loss_bf, sampler = trainer.train_step_variational_comparison(
+        state_bf, loss_bf, sampler = trainer.train_step_fssc_corespace(
             state_bf, hamiltonian, sampler) # , flag, stored_tuple
         train_losses_bf.append(loss_bf)
         

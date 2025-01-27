@@ -1,12 +1,12 @@
 import pyscf 
 
 learning_rate =0.01
-num_epochs = 15000
-n_core = 220
-batch_size = 220
-hidden_layer_sizes =[2]
+num_epochs = 5000
+n_core = 4000
+batch_size = 4000
+hidden_layer_sizes =[4]
 mol = pyscf.M(
-    atom = 'Li 0 0 0;H 0 0 1 ; ', #  H 0 0 3.0;  H 0 0 4.0 , # H 0 0 3.0; H 0 0 4.0  ,
+    atom = 'N 0 0 0;N 0 0 1 ; ', #  H 0 0 3.0;  H 0 0 4.0 , # H 0 0 3.0; H 0 0 4.0  ,
     basis = 'sto-3g',
     spin = 0,
     charge = 0,

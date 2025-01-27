@@ -66,7 +66,7 @@ class FSSC(Sampler):
         return self
 
      
-    @jax.jit 
+    # @jax.jit 
     def next_sample_stored(self, hamiltonian :Hamiltonian) -> jnp.ndarray:   #input: state instead of params,last_sample
         # sorted_indices = jnp.argsort(jnp.abs(last_sample[1]),descending =True)
         # core_space = last_sample[0][sorted_indices][:self.n_core]
@@ -77,7 +77,7 @@ class FSSC(Sampler):
         # return (jnp.asarray(full_space,dtype=jnp.uint8), jnp.asarray(self.wfn_apply({'params': params},(full_space)),jnp.float64))
         return self._full_space_(self.core_space),self.ham_stored(self.core_space, hamiltonian)
     
-    @jax.jit 
+    # @jax.jit 
     def next_sample_stored_batch(self,batch_core, hamiltonian :Hamiltonian) -> jnp.ndarray:   #input: state instead of params,last_sample
         # sorted_indices = jnp.argsort(jnp.abs(last_sample[1]),descending =True)
         # core_space = last_sample[0][sorted_indices][:self.n_core]
@@ -89,22 +89,27 @@ class FSSC(Sampler):
         return self._full_space_(batch_core),self.ham_stored(batch_core, hamiltonian)
     
       
+    # ~TODO~: DEBUG :DONE 
+        # Can be a problem when padding is needed as 
+        # Solution: add the padding element manually and then remove it
+        # size = self.n_full +1
+        # [1:] clip the array based on lexicographic sort order
+        # [1:] [:-1] +1 -1 ,jnp.zeros((1,self.n_spac_orb),dtype =jnp.uint8)
     def _full_space_(self, sample_core: jnp.ndarray) -> jnp.ndarray:
-        # connected_space = jnp.empty((self.n_connected,self.n_spac_orb), dtype=jnp.uint8)
-        # connected = self._vmap_generate_connected_space(core)
-        # connected = jnp.reshape(connected,(-1, self.n_spac_orb))
-        
-        # connected = jnp.unique(connected, size = self.n_full ,axis=0,fill_value=jnp.zeros(self.n_spac_orb))
-        # connected = self._remove_core_elements(connected,core)
-        # connected_space = self._remove_excess_padding(connected,size=self.n_connected)
-        
+       
         connected_space = self._vmap_generate_connected_space(sample_core)
-        full_space = jnp.concatenate((sample_core,connected_space.reshape(-1,self.n_spac_orb)),axis=0)
+        # full_space = jnp.concatenate((sample_core,connected_space.reshape(-1,self.n_spac_orb)),axis=0)
 
-        unique_full, idx = jnp.unique(full_space,axis=0, size = self.n_full, return_inverse=True
-                                        ,fill_value=jnp.zeros(self.n_spac_orb))
-        return unique_full,idx
+        # unique_full, idx = jnp.unique(full_space,axis=0, size = self.n_full, return_inverse=True
+        #                                 ,fill_value=jnp.zeros(self.n_spac_orb))
+        # return unique_full,idx
 
+        full_space = jnp.concatenate((sample_core,connected_space.reshape(-1,self.n_spac_orb)
+                                       ,jnp.zeros((1,self.n_spac_orb),dtype =jnp.uint8)),axis=0)
+        bin_full_space = self._binary_to_int64(full_space)
+        unique_full, idx ,inverse_idx = jnp.unique(bin_full_space,return_index=True, size = self.n_full+1, return_inverse=True
+                                        ,fill_value=jnp.zeros_like(bin_full_space[0]))
+        return full_space[idx][1:], inverse_idx[:-1]-1
 
     def ham_stored(self, sample_core, hamiltonain):
         # sample_core = sample[0][sample[1][:sampler.n_core]].reshape(-1,sampler.n_spac_orb)
@@ -142,6 +147,12 @@ class FSSC(Sampler):
         return jax.lax.cond(condition, lambda : det, lambda : jnp.zeros(self.n_spac_orb, dtype=jnp.uint8))
         #return jnp.any(condition)
 
+    @partial(jax.vmap, in_axes=(None, 0))
+    def _binary_to_int64(self, array):
+        #print(array.shape)
+        powers_of_two = jnp.power(2, jnp.arange(array.shape[0], dtype=jnp.int64))
+        return jnp.dot(array, powers_of_two)
+    
     def tree_flatten(self):
         # Return the dynamic fields and static fields separately
         dynamic = (self.core_space,)  # Include any fields that should be transformed with jax (for example, mutable arrays)
@@ -159,7 +170,7 @@ class FSSC(Sampler):
 
 
 ## Deprecated Methods: Can be useful in the future
- # @partial(jax.vmap, in_axes=(0))
+    # @partial(jax.vmap, in_axes=(0))
         # def find_Ci(det):
         #     condition=jnp.all(last_slater_determinants==det,axis=1)
         #     return jax.lax.cond(jnp.any(condition), Ci_in_preds, 
@@ -209,4 +220,14 @@ class FSSC(Sampler):
     # full_space =full_space[relevant_indices]
 
     # return (full_space, self.wfn_apply({'params': params}, full_space))
-        
+    
+
+
+    # connected_space = jnp.empty((self.n_connected,self.n_spac_orb), dtype=jnp.uint8)
+    # connected = self._vmap_generate_connected_space(core)
+    # connected = jnp.reshape(connected,(-1, self.n_spac_orb))
+    
+    # connected = jnp.unique(connected, size = self.n_full ,axis=0,fill_value=jnp.zeros(self.n_spac_orb))
+    # connected = self._remove_core_elements(connected,core)
+    # connected_space = self._remove_excess_padding(connected,size=self.n_connected)
+    
