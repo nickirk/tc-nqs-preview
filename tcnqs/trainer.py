@@ -232,20 +232,15 @@ def train_step_fssc_corespace(state, hamiltonian :Hamiltonian, sampler: FSSC):
         Norm = jnp.linalg.norm(Ci)
         energy = jnp.dot(ci_core,e_loc)/Norm**2
         return energy
-    
     e_val , grads= jax.value_and_grad(energy,argnums=0)(state.params,unique_full[idx][:sampler.n_core],e_loc)
     
-    ## Taking Jacobian is not efficient
+   
+    # Using the funtion jacobian_formatted to calculate jacobian instead
+
     # Norm = jnp.linalg.norm(ci_core)
     # e_val = jnp.dot(ci_core,e_loc)/Norm**2
     # ## take grads only of core space inputs
-    # apply_fn_params = lambda params: state.apply_fn({'params': params}, sampler.core_space)
-    # jacobian = jax.jacrev(apply_fn_params)(state.params)
-    # #jacobian = jax.tree_map(lambda x: jnp.reshape(x,(sampler.n_core,-1)).T,jacobian)
-    # ## Contract this jacobian using eloc and e_val
-    # jacobian = jax.tree_map(lambda x: jnp.reshape(x,(sampler.n_core,-1)),jacobian)
-    # jacobian = jax.tree.flatten(jacobian)[0]
-    # jacobian = jnp.concatenate(jacobian , axis= 1)
+    # jacobian = jacobian_formatted(state,sampler.core_space)
     # _, unravel_fn = jax.flatten_util.ravel_pytree(state.params)
     # grads = 2*jnp.dot(jacobian.T,e_loc)/Norm**2 - 2*e_val*jnp.dot(jacobian.T,ci_core)/Norm**2
     # grads = unravel_fn(grads)
@@ -446,7 +441,7 @@ def train_step_VITE_efficient(state, hamiltonian: Hamiltonian, sampler : FSSC):
     """
     sample , H_ij = sampler.next_sample_stored(hamiltonian)
     unique_full , idx = sample
-    Ci = state.apply_fn({'params': state.params},unique_full)  #/norm
+    Ci = state.apply_fn({'params': state.params},unique_full)  
     ci_core, ci_connected = Ci[idx][:sampler.n_core], Ci[idx][sampler.n_core:].reshape(sampler.n_core,-1)
     Norm = jnp.linalg.norm(ci_core)
     ci_core, ci_connected = ci_core/Norm, ci_connected/Norm
@@ -454,32 +449,21 @@ def train_step_VITE_efficient(state, hamiltonian: Hamiltonian, sampler : FSSC):
     H_Psi = jnp.einsum('ij,ij->i', H_ij,ci_connected)
     energy = jnp.dot(ci_core,H_Psi)
     new_sample_core = unique_full[next_sample_idx]
+    
     ## Calculate A_ij
     Jacobian = jacobian_formatted(state,sampler.core_space)
-    # Jacobian_fn = lambda sd: jax.jacrev(state.apply_fn({'params': state.params}, jnp.expand_dims(sd,axis=0)),argnums=0)
-    # Jacobian = jax.vmap(Jacobian_fn)(sampler.core_space)
-
-    # apply_fn_params = lambda params: state.apply_fn({'params': params}, sampler.core_space)
-    # Jacobian = jax.jacrev(apply_fn_params,argnums=0)(state.params)
-    # Jacobian, _ = jax.flatten_util.ravel_pytree(Jacobian)
-    # Jacobian = Jacobian.reshape((-1, sampler.n_core)) #(-1,sampler.n_core)
-    # Jacobian = jax.tree_map(lambda x: jnp.reshape(x,(sampler.n_core,-1)),Jacobian)
-    # Jacobian = jax.tree.flatten(Jacobian)[0]
-    # Jacobian = jnp.concatenate(Jacobian ,axis= 1)
-    
     # Preserve Norm  
     Jacobian = (Jacobian - jnp.outer(ci_core,jnp.dot(Jacobian.T,ci_core)))/Norm
     #Aij_save =  Jacobian.T @ Jacobian  - (dC_j/dtheta_i * C_j)(Cj*dC_j/dtheta_i)
     Aij= Jacobian.T @ Jacobian  #- jnp.dot(Jacobian.T,ci_core)*jnp.dot(ci_core,Jacobian)
-    Aij= Aij+1e-7*(jnp.eye(Aij.shape[0]))  #Jacobian.T @ Jacobian # 
-    #inverse_Aij = jnp.linalg.inv(Aij, hermitian=True)
+    Aij= Aij+1e-7*(jnp.eye(Aij.shape[0]))
+
     ## Calculate B_i
     # B_i = dC_j/dtheta_i * H_jk * C_k - E* dC_j/dtheta_i * C_j
     # j - core space , k - connecected space
-    
-    B_i = jnp.dot(Jacobian.T, H_Psi) #- energy*jnp.dot(Jacobian.T,ci_core)
-    B_i = B_i
-    ##Update core space
+    B_i = jnp.dot(Jacobian.T, H_Psi)
+
+    ## Update core space
     sampler = sampler.update_core_space(new_sample_core)
 
     ## Update parameters- calculate grads and update

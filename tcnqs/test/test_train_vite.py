@@ -1,6 +1,7 @@
 import os
 os.environ['XLA_PYTHON_CLIENT_MEM_FRACTION'] = '0.3'
 os.environ['CUDA_VISIBLE_DEVICES'] = '7'
+
 #os.environ['XLA_FLAGS'] = '--xla_gpu_enable_tracing'
 #os.environ['JAX_PLATFORMS'] = 'cpu'
 import jax
@@ -11,6 +12,7 @@ import jax
 from scipy.special import comb
 import time
 
+jax.print_environment_info()
 
 from tcnqs.utils import build_ham_from_pyscf
 import tcnqs.backflow as bf
@@ -71,7 +73,7 @@ def test_backflow_vite(mol,n_core,num_epochs=2400, test=False ,random_key=17 ):
     #unique fn min of (n_total_dets, n_batch*n_connections) 
     sampler = FSSC(n_core, int(n_connected) ,hamiltonian.n_elec_a, hamiltonian.n_elec_b, num_orbitals, n_batch=batch_size)
     sampler = sampler.initialize()
-    svd_save = []
+    # svd_save = []
     for epoch in range(num_epochs):
         
         state_bf, loss_bf, sampler  = trainer.train_step_VITE_efficient(state_bf, hamiltonian, sampler)

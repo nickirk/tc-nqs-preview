@@ -66,7 +66,7 @@ class FSSC(Sampler):
         return self
 
      
-    # @jax.jit 
+    @jax.jit 
     def next_sample_stored(self, hamiltonian :Hamiltonian) -> jnp.ndarray:   #input: state instead of params,last_sample
         # sorted_indices = jnp.argsort(jnp.abs(last_sample[1]),descending =True)
         # core_space = last_sample[0][sorted_indices][:self.n_core]
@@ -77,7 +77,7 @@ class FSSC(Sampler):
         # return (jnp.asarray(full_space,dtype=jnp.uint8), jnp.asarray(self.wfn_apply({'params': params},(full_space)),jnp.float64))
         return self._full_space_(self.core_space),self.ham_stored(self.core_space, hamiltonian)
     
-    # @jax.jit 
+    @jax.jit 
     def next_sample_stored_batch(self,batch_core, hamiltonian :Hamiltonian) -> jnp.ndarray:   #input: state instead of params,last_sample
         # sorted_indices = jnp.argsort(jnp.abs(last_sample[1]),descending =True)
         # core_space = last_sample[0][sorted_indices][:self.n_core]
