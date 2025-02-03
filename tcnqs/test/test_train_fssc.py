@@ -70,8 +70,8 @@ def test_backflow_fssc(mol, n_core, num_epochs=2400, test=False ,random_key=17):
             state_bf, hamiltonian, sampler) # , flag, stored_tuple
         train_losses_bf.append(loss_bf)
         
-        print(f"Epoch {epoch+1} , Loss_bf: {loss_bf }")#,{flag}
-   
+        print(f"Epoch {epoch+1} , Loss_bf: {loss_bf }")
+    
     # if test:
     #     assert jnp.absolute(train_losses_bf[-1]-fci_e_pyscf) < 5e-3
     #     print("Success: Model trained successfully")

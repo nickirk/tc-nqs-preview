@@ -474,6 +474,58 @@ def train_step_VITE_efficient(state, hamiltonian: Hamiltonian, sampler : FSSC):
 
     return state, energy, sampler 
 
+@jax.jit
+def train_step_minSR(state, hamiltonian: Hamiltonian, sampler : FSSC):
+    """
+    Perform a single training step for the Variational Imaginary Time Evolution (VITE) algorithm.
+    Args:
+        state: The current state of the model, including parameters and apply function.
+        hamiltonian (Hamiltonian): The Hamiltonian of the system being simulated.
+        sampler (FSSC): The sampler used to generate samples from the quantum state.
+    Returns:
+        tuple: A tuple containing the updated state, the energy and the updated sampler.
+    """
+    sample , H_ij = sampler.next_sample_stored(hamiltonian)
+    unique_full , idx = sample
+    Ci = state.apply_fn({'params': state.params},unique_full)  
+    ci_core, ci_connected = Ci[idx][:sampler.n_core], Ci[idx][sampler.n_core:].reshape(sampler.n_core,-1)
+    Norm = jnp.linalg.norm(ci_core)
+    ci_core, ci_connected = ci_core/Norm, ci_connected/Norm
+    next_sample_idx = jnp.argsort(jnp.abs(Ci),descending =True)[:sampler.n_core]
+    H_Psi = jnp.einsum('ij,ij->i', H_ij,ci_connected)
+    energy = jnp.dot(ci_core,H_Psi)
+    new_sample_core = unique_full[next_sample_idx]
+    
+    ## Calculate A_ij
+    Jacobian = jacobian_formatted(state,sampler.core_space)
+    # Preserve Norm  
+    Jacobian = (Jacobian - jnp.outer(ci_core,jnp.dot(Jacobian.T,ci_core)))/Norm
+    # Aij_save =  Jacobian.T @ Jacobian  - (dC_j/dtheta_i * C_j)(Cj*dC_j/dtheta_i)
+    # Aij= Jacobian.T @ Jacobian  #- jnp.dot(Jacobian.T,ci_core)*jnp.dot(ci_core,Jacobian)
+    # Aij= Aij+1e-7*(jnp.eye(Aij.shape[0]))
+    # Neural tangent kernal
+    Tij = Jacobian @ Jacobian.T #+1e-7*(jnp.eye(Jacobian.shape[0]))
+
+    ## Calculate B_i
+    # B_i = dC_j/dtheta_i * H_jk * C_k - E* dC_j/dtheta_i * C_j
+    # j - core space , k - connecected space
+    B_i = H_Psi #Jacobian @ jnp.dot(Jacobian.T, H_Psi)
+
+    ## Update core space
+    sampler = sampler.update_core_space(new_sample_core)
+
+    ## Update parameters- calculate grads and update
+    _, unravel_fn = jax.flatten_util.ravel_pytree(state.params)
+    grads = Jacobian.T @ jnp.linalg.pinv(Tij)@B_i#jax.scipy.sparse.linalg.cg(Tij,B_i)[0] 
+    #jnp.linalg.pinv(Tij)@B_i#
+    grads = unravel_fn(grads)
+    state = state.apply_gradients(grads=grads)
+
+    return state, energy, sampler 
+
+
+
+
 # Without ADAM
 def create_train_state_VITE(rng, model, variables):
     tx = optax.sgd(learning_rate=learning_rate)
