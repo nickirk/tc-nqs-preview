@@ -1,4 +1,7 @@
+from functools import partial
 import os
+
+from requests import get
 os.environ['XLA_PYTHON_CLIENT_MEM_FRACTION'] = '0.3'
 os.environ['CUDA_VISIBLE_DEVICES'] = '8'
 
@@ -74,15 +77,16 @@ def test_backflow_vite(mol,n_core,num_epochs=2400, test=False ,random_key=17 ):
     sampler = FSSC(n_core, int(n_connected) ,hamiltonian.n_elec_a, hamiltonian.n_elec_b, num_orbitals, n_batch=batch_size)
     sampler = sampler.initialize()
     # svd_save = []
+    n_imp = t.n_eig_projections # Number of important eigen vectors
+    para, unravel_fn = jax.flatten_util.ravel_pytree(state_bf.params)
+    U = jnp.eye(para.shape[0])[:n_imp].T
+    
     for epoch in range(num_epochs):
         
-        state_bf, loss_bf, sampler  = trainer.train_step_VITE_efficient(state_bf, hamiltonian, sampler)
-        #,A_ij
-        # if epoch % 1000 == 0:
-        #     svd = jax.jit(lambda x : jnp.linalg.svd(x , compute_uv=False,hermitian=True))(A_ij)
-        #     svd = jnp.abs(svd)
-        #     svd_index = jnp.argsort(svd)
-        #     svd_save.append(svd[svd_index]/ jnp.max(svd))
+        state_bf, loss_bf, sampler, Aij  = trainer.train_step_projections(state_bf, hamiltonian, sampler,U)
+        
+        if epoch % 100 == 0:
+            U = get_U(Aij)
             
         train_losses_bf.append(loss_bf)
         
@@ -95,12 +99,18 @@ def test_backflow_vite(mol,n_core,num_epochs=2400, test=False ,random_key=17 ):
     
     return train_losses_bf, fci_e_pyscf
 
+@partial(jax.jit, static_argnums=(1))
+def get_U(Aij,n_imp=t.n_eig_projections):
+    eigvals, eigvecs = jax.jit(jnp.linalg.eigh)(Aij)
+    top_indices = jnp.argsort(eigvals)[::-1][:n_imp]
+    return eigvecs[:, top_indices]
+
 if __name__ == '__main__':
     mol = t.mol
     print(jax.devices())
     start = time.time()
     losses , fci_e_pyscf = test_backflow_vite(mol , random_key=15,n_core=t.n_core,num_epochs=t.num_epochs, test= True)
-    jnp.save(f"tcnqs/simulations/vite_{mol.atom_symbol(0)+mol.atom_symbol(1)}_lr={t.learning_rate}_ncore={t.n_core}.npy",jnp.array(losses))
+    jnp.save(f"tcnqs/simulations/projections_{mol.atom_symbol(0)+mol.atom_symbol(1)}_lr={t.learning_rate}_ncore={t.n_core}.npy",jnp.array(losses))
     jnp.save(f"tcnqs/simulations/fci_{mol.atom_symbol(0)+mol.atom_symbol(1)}.npy",jnp.array(fci_e_pyscf))
     end = time.time()
     print("Time taken: ", end-start)

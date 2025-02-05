@@ -227,23 +227,23 @@ def train_step_fssc_corespace(state, hamiltonian :Hamiltonian, sampler: FSSC):
     e_loc = jnp.einsum('ij,ij->i', ham_stored,ci_connected)
     
 
-    def energy(params,core_space,e_loc):
-        Ci = state.apply_fn({'params': params},core_space)
-        Norm = jnp.linalg.norm(Ci)
-        energy = jnp.dot(ci_core,e_loc)/Norm**2
-        return energy
-    e_val , grads= jax.value_and_grad(energy,argnums=0)(state.params,unique_full[idx][:sampler.n_core],e_loc)
+    # def energy(params,core_space,e_loc):
+    #     Ci = state.apply_fn({'params': params},core_space)
+    #     Norm = jnp.linalg.norm(Ci)
+    #     energy = jnp.dot(ci_core,e_loc)/Norm**2
+    #     return energy
+    # e_val , grads= jax.value_and_grad(energy,argnums=0)(state.params,unique_full[idx][:sampler.n_core],e_loc)
     
    
     # Using the funtion jacobian_formatted to calculate jacobian instead
 
-    # Norm = jnp.linalg.norm(ci_core)
-    # e_val = jnp.dot(ci_core,e_loc)/Norm**2
-    # ## take grads only of core space inputs
-    # jacobian = jacobian_formatted(state,sampler.core_space)
-    # _, unravel_fn = jax.flatten_util.ravel_pytree(state.params)
-    # grads = 2*jnp.dot(jacobian.T,e_loc)/Norm**2 - 2*e_val*jnp.dot(jacobian.T,ci_core)/Norm**2
-    # grads = unravel_fn(grads)
+    Norm = jnp.linalg.norm(ci_core)
+    e_val = jnp.dot(ci_core,e_loc)/Norm**2
+    ## take grads only of core space inputs
+    jacobian = jacobian_formatted(state,sampler.core_space)
+    _, unravel_fn = jax.flatten_util.ravel_pytree(state.params)
+    grads = 2*jnp.dot(jacobian.T,e_loc)/Norm**2 - 2*e_val*jnp.dot(jacobian.T,ci_core)/Norm**2
+    grads = unravel_fn(grads)
 
     state = state.apply_gradients(grads=grads)
     sampler = sampler.update_core_space(unique_full[next_sample_idx])
@@ -523,8 +523,10 @@ def train_step_minSR(state, hamiltonian: Hamiltonian, sampler : FSSC):
 
     return state, energy, sampler 
 
+
+
 @jax.jit
-def train_step_minSR(state, hamiltonian: Hamiltonian, sampler : FSSC):
+def train_step_projections(state, hamiltonian: Hamiltonian, sampler : FSSC, U : jnp.ndarray):
     """
     Perform a single training step for the Variational Imaginary Time Evolution (VITE) algorithm.
     Args:
@@ -549,29 +551,28 @@ def train_step_minSR(state, hamiltonian: Hamiltonian, sampler : FSSC):
     Jacobian = jacobian_formatted(state,sampler.core_space)
     # Preserve Norm  
     Jacobian = (Jacobian - jnp.outer(ci_core,jnp.dot(Jacobian.T,ci_core)))/Norm
-    # Aij_save =  Jacobian.T @ Jacobian  - (dC_j/dtheta_i * C_j)(Cj*dC_j/dtheta_i)
-    # Aij= Jacobian.T @ Jacobian  #- jnp.dot(Jacobian.T,ci_core)*jnp.dot(ci_core,Jacobian)
-    # Aij= Aij+1e-7*(jnp.eye(Aij.shape[0]))
-    # Neural tangent kernal
-    Tij = Jacobian @ Jacobian.T #+1e-7*(jnp.eye(Jacobian.shape[0]))
+    #Aij_save =  Jacobian.T @ Jacobian  - (dC_j/dtheta_i * C_j)(Cj*dC_j/dtheta_i)
+    Aij_save= Jacobian.T @ Jacobian  #- jnp.dot(Jacobian.T,ci_core)*jnp.dot(ci_core,Jacobian)
+    Aij= U.T @ Aij_save @ U
+    Aij= Aij+1e-7*(jnp.eye(Aij.shape[0]))
 
     ## Calculate B_i
     # B_i = dC_j/dtheta_i * H_jk * C_k - E* dC_j/dtheta_i * C_j
     # j - core space , k - connecected space
-    B_i = H_Psi #Jacobian @ jnp.dot(Jacobian.T, H_Psi)
+    B_i = U.T @ jnp.dot(Jacobian.T, H_Psi)
 
     ## Update core space
     sampler = sampler.update_core_space(new_sample_core)
 
     ## Update parameters- calculate grads and update
     _, unravel_fn = jax.flatten_util.ravel_pytree(state.params)
-    grads = Jacobian.T @ jnp.linalg.pinv(Tij)@B_i#jax.scipy.sparse.linalg.cg(Tij,B_i)[0] 
-    #jnp.linalg.pinv(Tij)@B_i#
+    grads = jax.scipy.sparse.linalg.cg(Aij,B_i)[0] 
+    grads = U @ grads
     grads = unravel_fn(grads)
     state = state.apply_gradients(grads=grads)
 
-    return state, energy, sampler 
 
+    return state, energy, sampler, Aij_save
 
 # Without ADAM
 def create_train_state_VITE(rng, model, variables):
