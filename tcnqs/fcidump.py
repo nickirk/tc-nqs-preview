@@ -2,13 +2,6 @@ import numpy as np
 import jax.numpy as jnp
 
 def read(fcidump_file, is_tc=False):
-    # read fcidump
-    with open(fcidump_file, 'r') as f:
-        lines = [x.lower().strip() for x in f.readlines()]
-        lbrk = [il for il, l in enumerate(lines) if "&end" in l or "/" in l][0]
-        k = 'orbsym'
-        #orb_sym = [[int(x) for x in (l.split(k)[1].split('=')[1].split(','))] for l in lines if k in l][0]
-
 
     with open(fcidump_file, 'r') as f:
         lines = [x.lower().strip() for x in f.readlines()]
