@@ -35,7 +35,7 @@ def test_backflow_vite(mol,n_core,num_epochs=2400, test=False ,random_key=17 ):
     cisolver = pyscf.fci.FCI(myhf)
     print("E FCI = ", fci_e_pyscf)
  
-    hamiltonian = build_ham_from_pyscf(mol, myhf)
+    hamiltonian = build_ham_from_pyscf(mol, myhf, is_tc=t.is_tc)
     
     
     num_orbitals = hamiltonian.n_orb
@@ -93,9 +93,9 @@ def test_backflow_vite(mol,n_core,num_epochs=2400, test=False ,random_key=17 ):
         print(f"Epoch: {epoch+1}, Loss_bf: {loss_bf}")
    
     # jnp.save(f"tcnqs/simulations/svd_Aij_{mol.atom_symbol(0)+mol.atom_symbol(1)}_lr={t.learning_rate}_ncore={t.n_core}.npy",jnp.array(svd_save))
-    # if test:
-    #     assert jnp.absolute(train_losses_bf[-1]-fci_e_pyscf) < 5e-3
-    #     print("Success: Model trained successfully")
+    if test:
+        assert jnp.absolute(train_losses_bf[-1]-fci_e_pyscf) < 5e-3
+        print("Success: Model trained successfully")
     
     return train_losses_bf, fci_e_pyscf
 

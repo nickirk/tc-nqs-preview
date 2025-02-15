@@ -1,7 +1,7 @@
 import numpy as np
 import jax.numpy as jnp
 
-def read(fcidump_file, is_tc=False):
+def read(fcidump_file, is_tc):
 
     with open(fcidump_file, 'r') as f:
         lines = [x.lower().strip() for x in f.readlines()]
@@ -66,8 +66,8 @@ def read_2_spin(fcidump_file):
                     g2e_s[2*i+1, 2*k, 2*l, 2*j+1] = g2e[i, k, l, j]
     return n_sites, n_elec, ecore, h1e_s, g2e_s
 
-def read_2_spin_orbital_seprated(fcidump_file):
-    n_sites, n_elec, ecore, h1e, g2e = read(fcidump_file)
+def read_2_spin_orbital_seprated(fcidump_file, is_tc):
+    n_sites, n_elec, ecore, h1e, g2e = read(fcidump_file,is_tc)
     
     h1e_s = np.kron(np.eye(2),h1e)
     g2e_s = np.zeros(np.asarray(g2e.shape)*2)

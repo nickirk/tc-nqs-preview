@@ -1,9 +1,15 @@
+from operator import is_
 import jax.numpy as jnp
 import numpy as np
 from pyscf.fci import cistring
 from pyscf.tools import fcidump
 from tcnqs.hamiltonian import Hamiltonian
 from tcnqs.fcidump import read_2_spin_orbital_seprated as read2
+from pyscf import gto, scf
+
+from pytc.xtc import XTC
+from pytc.jastrow import SimpleJastrow
+from pytc.utils import fcidump as fcidump_pytc
 
 def generate_ci_data(num_orbitals, num_alpha_electrons, num_beta_electrons, ci):
     """
@@ -69,13 +75,47 @@ def convert_binary_to_array(str_int, num_orbitals):
     
     return result_array[::-1]
 
+def generate_fci_dump(myhf, filename, is_tc):
+    """
+    Generate an FCIDUMP file for a molecule.
 
-def build_ham_from_pyscf(mol, myhf): 
+    Parameters
+    ----------
+    mol : pyscf.gto.Mole
+        Molecule for which to generate the FCIDUMP file.
+
+    filename : str
+        Name of the FCIDUMP file.
+
+    is_tc : bool
+        Whether to generate the FCIDUMP file for a two-component calculation.
+    """
+
+    if not is_tc:
+        fcidump.from_scf(myhf, filename)
+    else:
+        mol = myhf.mol
+        my_jastrow = SimpleJastrow([1.4])
+        my_xtc = XTC(myhf, my_jastrow, grid_lvl=2)
+        
+        h1e_xtc = my_xtc.get_1b()
+        h2e_xtc = my_xtc.get_2b()
+        ecore_xtc = my_xtc.get_const()
+        n_orb_xtc = h1e_xtc.shape[0]
+        n_elec_xtc = mol.nelec[0]
+        
+        fcidump_pytc.write_fcidump(filename, h1e_xtc, h2e_xtc, ecore_xtc, n_orb_xtc, n_elec_xtc)
+        
+
+
+
+def build_ham_from_pyscf(mol, myhf, is_tc= False): 
     # Read the FCIDUMP file
     #fcidump_file = 'tcnqs/test/dataset_fcidump/fcidump'
     fcidump_file = './fcidump'
-    fcidump.from_scf(myhf, fcidump_file)
-    n_sites, n_elec, ecore, h1e_s, g2e_s = read2(fcidump_file)
+    generate_fci_dump(myhf, fcidump_file, is_tc)
+    n_sites, n_elec, ecore, h1e_s, g2e_s = read2(fcidump_file,is_tc=is_tc)
+
     n_elec_a, n_elec_b = mol.nelec
     h1e_s = jnp.asarray(h1e_s)
     g2e_s = jnp.asarray(g2e_s)
