@@ -1,7 +1,7 @@
 from functools import partial
 import os
 
-from requests import get
+
 os.environ['XLA_PYTHON_CLIENT_MEM_FRACTION'] = '0.3'
 os.environ['CUDA_VISIBLE_DEVICES'] = '8'
 
@@ -99,18 +99,64 @@ def test_backflow_vite(mol,n_core,num_epochs=2400, test=False ,random_key=17 ):
     
     return train_losses_bf, fci_e_pyscf
 
-@partial(jax.jit, static_argnums=(1))
+# @partial(jax.jit, static_argnums=(1))
 def get_U(Aij,n_imp=t.n_eig_projections):
     eigvals, eigvecs = jax.jit(jnp.linalg.eigh)(Aij)
-    top_indices = jnp.argsort(eigvals)[::-1][:n_imp]
+    top_indices = jnp.argsort(eigvals)#[:n_imp]#[-n_imp:] #[:n_imp] # [::-1]
+    top_indices = jnp.where(eigvals[top_indices]/eigvals[top_indices[-1]]>1e-10,size=t.n_eig_projections)[0][:n_imp]
+    #print(eigvals[top_indices])
     return eigvecs[:, top_indices]
+
+# def pivoted_cholesky_small(A, tol=1e-8, max_rank=None):
+#     n = A.shape[0]
+#     if max_rank is None:
+#         max_rank = n
+#     diag_A = jnp.diag(A)
+#     R = diag_A.copy()
+#     L = jnp.zeros((n, max_rank), dtype=A.dtype)
+#     selected = []
+#     for k in range(max_rank):
+#         # among entries with R > tol, choose the one with the smallest value.
+#         candidates = jnp.where(R > tol, R, jnp.inf)
+#         pivot = int(jnp.argmin(candidates))
+#         if candidates[pivot] == jnp.inf:
+#             break
+#         selected.append(pivot)
+#         pivot_val = jnp.sqrt(R[pivot])
+#         L = L.at[pivot, k].set(pivot_val)
+#         for i in range(n):
+#             if k == 0:
+#                 L = L.at[i, k].set(A[i, pivot] / pivot_val)
+#             else:
+#                 dot = jnp.dot(L[i, :k], L[pivot, :k])
+#                 L = L.at[i, k].set((A[i, pivot] - dot) / pivot_val)
+#         L_col = L[:, k]
+#         R = R - L_col ** 2
+#     L = L[:, : len(selected)]
+#     return L, selected
+
+
+# def get_U(Aij, n_imp=t.n_eig_projections):
+#     # Use pivoted Cholesky (with pivot selection based on smallest diagonal above tol)
+#     L, selected = pivoted_cholesky_small(Aij, tol=1e-8, max_rank=n_imp)
+#     # Obtain an orthonormal basis for the columns of L via QR factorization.
+#     Q, _ = jnp.linalg.qr(L)
+#     # Ensure we always return n_imp columns.
+#     if Q.shape[1] < n_imp:
+#         pad = jnp.eye(Q.shape[0], n_imp - Q.shape[1], dtype=Q.dtype)
+#         U = jnp.concatenate([Q, pad], axis=1)
+#     else:
+#         U = Q[:, :n_imp]
+#     return U
+
 
 if __name__ == '__main__':
     mol = t.mol
+    
     print(jax.devices())
     start = time.time()
     losses , fci_e_pyscf = test_backflow_vite(mol , random_key=15,n_core=t.n_core,num_epochs=t.num_epochs, test= True)
-    jnp.save(f"tcnqs/simulations/projections_{mol.atom_symbol(0)+mol.atom_symbol(1)}_lr={t.learning_rate}_ncore={t.n_core}.npy",jnp.array(losses))
+    jnp.save(f"tcnqs/simulations/projections_1e-10_{mol.atom_symbol(0)+mol.atom_symbol(1)}_lr={t.learning_rate}_ncore={t.n_core}.npy",jnp.array(losses))
     jnp.save(f"tcnqs/simulations/fci_{mol.atom_symbol(0)+mol.atom_symbol(1)}.npy",jnp.array(fci_e_pyscf))
     end = time.time()
     print("Time taken: ", end-start)

@@ -516,7 +516,7 @@ def train_step_minSR(state, hamiltonian: Hamiltonian, sampler : FSSC):
 
     ## Update parameters- calculate grads and update
     _, unravel_fn = jax.flatten_util.ravel_pytree(state.params)
-    grads = Jacobian.T @ jnp.linalg.pinv(Tij)@B_i#jax.scipy.sparse.linalg.cg(Tij,B_i)[0] 
+    grads = Jacobian.T @ jnp.linalg.pinv(Tij,rcond=5e-8, hermitian=True)@B_i#jax.scipy.sparse.linalg.cg(Tij,B_i)[0] 
     #jnp.linalg.pinv(Tij)@B_i#
     grads = unravel_fn(grads)
     state = state.apply_gradients(grads=grads)
@@ -572,7 +572,7 @@ def train_step_projections(state, hamiltonian: Hamiltonian, sampler : FSSC, U : 
     state = state.apply_gradients(grads=grads)
 
 
-    return state, energy, sampler, Aij_save
+    return state, energy, sampler, Aij_save #+1e-7*(jnp.eye(Aij_save.shape[0]))
 
 # Without ADAM
 def create_train_state_VITE(rng, model, variables):
