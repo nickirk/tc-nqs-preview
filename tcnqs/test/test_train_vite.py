@@ -12,8 +12,6 @@ import jax
 from scipy.special import comb
 import time
 
-
-
 from tcnqs.utils import build_ham_from_pyscf
 import tcnqs.backflow as bf
 import tcnqs.trainer as trainer
@@ -32,11 +30,9 @@ def test_backflow_vite(mol,n_core,num_epochs=2400, test=False ,random_key=17 ):
     cisolver = pyscf.fci.FCI(myhf)
     print("E FCI = ", fci_e_pyscf)
  
-    hamiltonian = build_ham_from_pyscf(mol, myhf)
-    
+    hamiltonian = build_ham_from_pyscf(mol, myhf, is_tc=t.is_tc)
     
     num_orbitals = hamiltonian.n_orb
-
 
     model_bf, variables_bf = bf.create_model(rng, input_shape = num_orbitals, 
                                             num_electrons= hamiltonian.n_elec,

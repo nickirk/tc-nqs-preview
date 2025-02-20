@@ -94,7 +94,7 @@ def test_backflow_vite(mol,n_core,num_epochs=2400, test=False ,random_key=17 ):
    
     # jnp.save(f"tcnqs/simulations/svd_Aij_{mol.atom_symbol(0)+mol.atom_symbol(1)}_lr={t.learning_rate}_ncore={t.n_core}.npy",jnp.array(svd_save))
     if test:
-        assert jnp.absolute(train_losses_bf[-1]-fci_e_pyscf) < 5e-3
+        assert jnp.absolute(train_losses_bf[-1]-fci_e_pyscf) < 1.4e-3
         print("Success: Model trained successfully")
     
     return train_losses_bf, fci_e_pyscf
@@ -103,7 +103,7 @@ def test_backflow_vite(mol,n_core,num_epochs=2400, test=False ,random_key=17 ):
 def get_U(Aij,n_imp=t.n_eig_projections):
     eigvals, eigvecs = jax.jit(jnp.linalg.eigh)(Aij)
     top_indices = jnp.argsort(eigvals)#[:n_imp]#[-n_imp:] #[:n_imp] # [::-1]
-    top_indices = jnp.where(eigvals[top_indices]/eigvals[top_indices[-1]]>1e-10,size=t.n_eig_projections)[0][:n_imp]
+    top_indices = jnp.where(eigvals[top_indices]/eigvals[top_indices[-1]]>1e-15,size=t.n_eig_projections)[0][:n_imp]
     #print(eigvals[top_indices])
     return eigvecs[:, top_indices]
 
