@@ -12,11 +12,10 @@ import jax
 from scipy.special import comb
 import time
 
-
-
 from tcnqs.utils import build_ham_from_pyscf
 import tcnqs.backflow as bf
-import tcnqs.trainer as trainer
+# import tcnqs.trainer as trainer
+import tcnqs.trainer_vite as trainer
 from tcnqs.sampler.fssc import FSSC
 import tcnqs.test.test_parameters as t
 
@@ -76,14 +75,7 @@ def test_backflow_vite(mol,n_core,num_epochs=2400, test=False ,random_key=17 ):
     # svd_save = []
     for epoch in range(num_epochs):
         
-        state_bf, loss_bf, sampler  = trainer.train_step_minSR(state_bf, hamiltonian, sampler)
-        #,A_ij
-        # if epoch % 1000 == 0:
-        #     svd = jax.jit(lambda x : jnp.linalg.svd(x , compute_uv=False,hermitian=True))(A_ij)
-        #     svd = jnp.abs(svd)
-        #     svd_index = jnp.argsort(svd)
-        #     svd_save.append(svd[svd_index]/ jnp.max(svd))
-            
+        state_bf, loss_bf, sampler  = trainer.trainer_vite(state_bf, hamiltonian, sampler , solver='MinSR')
         train_losses_bf.append(loss_bf)
         
         print(f"Epoch: {epoch+1}, Loss_bf: {loss_bf}")

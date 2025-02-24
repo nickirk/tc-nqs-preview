@@ -1,7 +1,6 @@
 from functools import partial
 import os
 
-
 os.environ['XLA_PYTHON_CLIENT_MEM_FRACTION'] = '0.3'
 os.environ['CUDA_VISIBLE_DEVICES'] = '8'
 
@@ -15,11 +14,10 @@ import jax
 from scipy.special import comb
 import time
 
-
-
 from tcnqs.utils import build_ham_from_pyscf
 import tcnqs.backflow as bf
 import tcnqs.trainer as trainer
+# import tcnqs.trainer_vite as trainer
 from tcnqs.sampler.fssc import FSSC
 import tcnqs.test.test_parameters as t
 
