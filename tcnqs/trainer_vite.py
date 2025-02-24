@@ -80,8 +80,8 @@ def jacobian_normalized(state, core_space, ci_core, norm):
     Jacobian = (Jacobian - jnp.outer(ci_core, jnp.dot(Jacobian.T, ci_core))) / norm
     return Jacobian
 
-@partial(jax.jit, static_argnums=(3))
-def trainer_vite(state:TrainState, hamiltonian: Hamiltonian, sampler : FSSC , solver = 'SR'):
+@partial(jax.jit, static_argnums=(4))
+def trainer_vite(state:TrainState, hamiltonian: Hamiltonian, sampler : FSSC , proj_matrix = None,solver = 'SR'):
     """
     Performs one training iteration using VITE.
 
@@ -102,7 +102,7 @@ def trainer_vite(state:TrainState, hamiltonian: Hamiltonian, sampler : FSSC , so
     jacobian = jacobian_normalized(state, sampler.core_space, ci_core, Norm)
 
     # Solve for gradients
-    grads = vite_solver(jacobian, E_loc, method = solver)
+    grads = vite_solver(jacobian, E_loc, proj_matrix=proj_matrix ,method = solver)
 
     # Update sampler core space
     sampler = sampler.update_core_space(new_sample_core)
@@ -112,7 +112,10 @@ def trainer_vite(state:TrainState, hamiltonian: Hamiltonian, sampler : FSSC , so
     grads = unravel_fn(grads)
     state = state.apply_gradients(grads=grads)
 
-    return state, energy, sampler
+    if solver=='projectedSR':
+        return state, energy, sampler, jacobian.T @ jacobian
+    else:
+        return state, energy, sampler
     
 def Stochastic_Reconfiguration(jacobian, E_loc):
     """
@@ -147,7 +150,7 @@ def MinSR(jacobian, E_loc):
     grads = jacobian.T @ jnp.linalg.pinv(Tij, rcond=5e-8, hermitian=True) @ B_i
     return grads
 
-def Projections(jacobian, E_loc, proj_matrix):
+def projected_SR(jacobian, E_loc, proj_matrix):
     """
     Applies a projection matrix before performing SR.
 
@@ -185,8 +188,8 @@ def vite_solver(jacobian: jnp.ndarray, E_loc: jnp.ndarray, proj_matrix: jnp.ndar
         return Stochastic_Reconfiguration(jacobian, E_loc)
     elif method == 'MinSR':
         return MinSR(jacobian, E_loc)
-    elif method == 'Projections':
-        return Projections(jacobian, E_loc, proj_matrix)
+    elif method == 'projectedSR':
+        return projected_SR(jacobian, E_loc, proj_matrix)
     else:
         raise ValueError('Method not implemented')
 

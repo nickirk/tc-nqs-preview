@@ -1,3 +1,4 @@
+from numpy import save
 import pyscf 
 
 learning_rate =0.01
@@ -16,4 +17,5 @@ mol = pyscf.M(
 #    unit = 'Ang'
     )
 n_bf_dets = 1
-n_eig_projections = 256
+n_eig_projections = 50
+save = False

@@ -1,6 +1,6 @@
 from functools import partial
 import os
-
+os.environ["JAX_PLATFORM_NAME"] = "cuda"
 os.environ['XLA_PYTHON_CLIENT_MEM_FRACTION'] = '0.3'
 os.environ['CUDA_VISIBLE_DEVICES'] = '8'
 
@@ -16,8 +16,8 @@ import time
 
 from tcnqs.utils import build_ham_from_pyscf
 import tcnqs.backflow as bf
-import tcnqs.trainer as trainer
-# import tcnqs.trainer_vite as trainer
+# import tcnqs.trainer as trainer
+import tcnqs.trainer_vite as trainer
 from tcnqs.sampler.fssc import FSSC
 import tcnqs.test.test_parameters as t
 
@@ -81,7 +81,7 @@ def test_backflow_vite(mol,n_core,num_epochs=2400, test=False ,random_key=17 ):
     
     for epoch in range(num_epochs):
         
-        state_bf, loss_bf, sampler, Aij  = trainer.train_step_projections(state_bf, hamiltonian, sampler,U)
+        state_bf, loss_bf, sampler, Aij  = trainer.trainer_vite(state_bf, hamiltonian, sampler, proj_matrix=U, solver='projectedSR')
         
         if epoch % 100 == 0:
             U = get_U(Aij)
@@ -154,7 +154,10 @@ if __name__ == '__main__':
     print(jax.devices())
     start = time.time()
     losses , fci_e_pyscf = test_backflow_vite(mol , random_key=15,n_core=t.n_core,num_epochs=t.num_epochs, test= True)
-    jnp.save(f"tcnqs/simulations/projections_1e-10_{mol.atom_symbol(0)+mol.atom_symbol(1)}_lr={t.learning_rate}_ncore={t.n_core}.npy",jnp.array(losses))
-    jnp.save(f"tcnqs/simulations/fci_{mol.atom_symbol(0)+mol.atom_symbol(1)}.npy",jnp.array(fci_e_pyscf))
+    
+    if t.save:
+        print("Saving to file")
+        jnp.save(f"tcnqs/simulations/projections_1e-10_{mol.atom_symbol(0)+mol.atom_symbol(1)}_lr={t.learning_rate}_ncore={t.n_core}.npy",jnp.array(losses))
+        jnp.save(f"tcnqs/simulations/fci_{mol.atom_symbol(0)+mol.atom_symbol(1)}.npy",jnp.array(fci_e_pyscf))
     end = time.time()
     print("Time taken: ", end-start)

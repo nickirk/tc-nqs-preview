@@ -1,4 +1,5 @@
 import os
+os.environ["JAX_PLATFORM_NAME"] = "cuda"
 os.environ['XLA_PYTHON_CLIENT_MEM_FRACTION'] = '0.3'
 os.environ['CUDA_VISIBLE_DEVICES'] = '8'
 
@@ -79,11 +80,6 @@ def test_backflow_vite(mol,n_core,num_epochs=2400, test=False ,random_key=17 ):
         train_losses_bf.append(loss_bf)
         
         print(f"Epoch: {epoch+1}, Loss_bf: {loss_bf}")
-   
-    # jnp.save(f"tcnqs/simulations/svd_Aij_{mol.atom_symbol(0)+mol.atom_symbol(1)}_lr={t.learning_rate}_ncore={t.n_core}.npy",jnp.array(svd_save))
-    # if test:
-    #     assert jnp.absolute(train_losses_bf[-1]-fci_e_pyscf) < 5e-3
-    #     print("Success: Model trained successfully")
     
     return train_losses_bf, fci_e_pyscf
 
@@ -92,7 +88,9 @@ if __name__ == '__main__':
     print(jax.devices())
     start = time.time()
     losses , fci_e_pyscf = test_backflow_vite(mol , random_key=15,n_core=t.n_core,num_epochs=t.num_epochs, test= True)
-    jnp.save(f"tcnqs/simulations/minSR1_{mol.atom_symbol(0)+mol.atom_symbol(1)}_lr={t.learning_rate}_ncore={t.n_core}.npy",jnp.array(losses))
-    jnp.save(f"tcnqs/simulations/fci_{mol.atom_symbol(0)+mol.atom_symbol(1)}.npy",jnp.array(fci_e_pyscf))
+    if t.save:
+        print("Saving to file")
+        jnp.save(f"tcnqs/simulations/minSR1_{mol.atom_symbol(0)+mol.atom_symbol(1)}_lr={t.learning_rate}_ncore={t.n_core}.npy",jnp.array(losses))
+        jnp.save(f"tcnqs/simulations/fci_{mol.atom_symbol(0)+mol.atom_symbol(1)}.npy",jnp.array(fci_e_pyscf))
     end = time.time()
     print("Time taken: ", end-start)

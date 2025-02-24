@@ -1,4 +1,5 @@
 import os
+os.environ["JAX_PLATFORM_NAME"] = "cuda"
 os.environ['XLA_PYTHON_CLIENT_MEM_FRACTION'] = '0.3'
 os.environ['CUDA_VISIBLE_DEVICES'] = '8'
 
@@ -97,7 +98,10 @@ if __name__ == '__main__':
     print(jax.devices())
     start = time.time()
     losses , fci_e_pyscf = test_backflow_vite(mol , random_key=15,n_core=t.n_core,num_epochs=t.num_epochs, test= True)
-    jnp.save(f"tcnqs/simulations/vite_{mol.atom_symbol(0)+mol.atom_symbol(1)}_lr={t.learning_rate}_ncore={t.n_core}.npy",jnp.array(losses))
-    jnp.save(f"tcnqs/simulations/fci_{mol.atom_symbol(0)+mol.atom_symbol(1)}.npy",jnp.array(fci_e_pyscf))
+    
+    if t.save:
+        print("Saving to file")
+        jnp.save(f"tcnqs/simulations/vite_{mol.atom_symbol(0)+mol.atom_symbol(1)}_lr={t.learning_rate}_ncore={t.n_core}.npy",jnp.array(losses))
+        jnp.save(f"tcnqs/simulations/fci_{mol.atom_symbol(0)+mol.atom_symbol(1)}.npy",jnp.array(fci_e_pyscf))
     end = time.time()
     print("Time taken: ", end-start)
