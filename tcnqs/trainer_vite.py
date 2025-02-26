@@ -13,7 +13,7 @@ from tcnqs.test.test_parameters import learning_rate
 from tcnqs.trainer import energy 
 
 
-@jax.jit
+# @jax.jit
 def energy_fn(state, hamiltonian: Hamiltonian, sampler: FSSC):
     """
     Computes the local energy and prepares new sampling points.
@@ -80,7 +80,7 @@ def jacobian_normalized(state, core_space, ci_core, norm):
     Jacobian = (Jacobian - jnp.outer(ci_core, jnp.dot(Jacobian.T, ci_core))) / norm
     return Jacobian
 
-@partial(jax.jit, static_argnums=(4))
+# @partial(jax.jit, static_argnums=(4))
 def trainer_vite(state:TrainState, hamiltonian: Hamiltonian, sampler : FSSC , proj_matrix = None,solver = 'SR'):
     """
     Performs one training iteration using VITE.

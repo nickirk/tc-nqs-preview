@@ -1,7 +1,7 @@
 import os
 os.environ["JAX_PLATFORM_NAME"] = "cuda"
-os.environ['XLA_PYTHON_CLIENT_MEM_FRACTION'] = '0.3'
-os.environ['CUDA_VISIBLE_DEVICES'] = '8'
+os.environ['XLA_PYTHON_CLIENT_MEM_FRACTION'] = '0.8'
+os.environ['CUDA_VISIBLE_DEVICES'] = '0'
 
 #os.environ['XLA_FLAGS'] = '--xla_gpu_enable_tracing'
 #os.environ['JAX_PLATFORMS'] = 'cpu'
@@ -20,6 +20,9 @@ import tcnqs.trainer_vite as trainer
 from tcnqs.sampler.fssc import FSSC
 import tcnqs.test.test_parameters as t
 
+# import tensorflow as tf
+# logdir = "./logs"
+# os.makedirs(logdir, exist_ok=True)
 
 def test_backflow_vite(mol,n_core,num_epochs=2400, test=False ,random_key=17 ):
     if test:
@@ -74,16 +77,21 @@ def test_backflow_vite(mol,n_core,num_epochs=2400, test=False ,random_key=17 ):
     sampler = FSSC(n_core, int(n_connected) ,hamiltonian.n_elec_a, hamiltonian.n_elec_b, num_orbitals, n_batch=batch_size)
     sampler = sampler.initialize()
     # svd_save = []
+    jax.profiler.start_trace("tmp/tensorboard")
     for epoch in range(num_epochs):
-        
+        # a = time.time()
         state_bf, loss_bf, sampler  = trainer.trainer_vite(state_bf, hamiltonian, sampler , solver='MinSR')
+        # loss_bf.block_until_ready()
         train_losses_bf.append(loss_bf)
-        
-        print(f"Epoch: {epoch+1}, Loss_bf: {loss_bf}")
-    
+        # b = time.time()
+        print(f"Epoch: {epoch+1}, Loss_bf: {loss_bf}") #, Time taken: {b-a}
+    # train_losses_bf.block_until_ready()
+    jax.device_get(train_losses_bf)
+    jax.profiler.stop_trace()
     return train_losses_bf, fci_e_pyscf
 
 if __name__ == '__main__':
+    
     mol = t.mol
     print(jax.devices())
     start = time.time()

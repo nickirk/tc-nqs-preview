@@ -66,7 +66,7 @@ class FSSC(Sampler):
         return self
 
      
-    @jax.jit 
+    # @jax.jit 
     def next_sample_stored(self, hamiltonian :Hamiltonian) -> jnp.ndarray:   #input: state instead of params,last_sample
         # sorted_indices = jnp.argsort(jnp.abs(last_sample[1]),descending =True)
         # core_space = last_sample[0][sorted_indices][:self.n_core]
@@ -95,6 +95,7 @@ class FSSC(Sampler):
         # size = self.n_full +1
         # [1:] clip the array based on lexicographic sort order
         # [1:] [:-1] +1 -1 ,jnp.zeros((1,self.n_spac_orb),dtype =jnp.uint8)
+    @jax.jit
     def _full_space_(self, sample_core: jnp.ndarray) -> jnp.ndarray:
        
         connected_space = self._vmap_generate_connected_space(sample_core)
@@ -111,10 +112,12 @@ class FSSC(Sampler):
                                         ,fill_value=jnp.zeros_like(bin_full_space[0]))
         return full_space[idx][1:], inverse_idx[:-1]-1
 
+    # @jax.jit
     def ham_stored(self, sample_core, hamiltonain):
         # sample_core = sample[0][sample[1][:sampler.n_core]].reshape(-1,sampler.n_spac_orb)
         connected_space = self._vmap_generate_connected_space(sample_core)
         # connected_space = sample[0][sample[1][sampler.n_core:]].reshape(sampler.n_core,-1,sampler.n_spac_orb)
+        # @jax.jit
         @partial(jax.vmap,in_axes=(0,0))
         def psi_H_xi(slater_determinant,connections):
             return jax.vmap(hamiltonain,in_axes=(None,0))(slater_determinant,connections)
