@@ -1,7 +1,7 @@
 import os
 os.environ["JAX_PLATFORM_NAME"] = "cuda"
 os.environ['XLA_PYTHON_CLIENT_MEM_FRACTION'] = '0.1'
-os.environ['CUDA_VISIBLE_DEVICES'] = '2'
+os.environ['CUDA_VISIBLE_DEVICES'] = '0'
 
 #os.environ['XLA_FLAGS'] = '--xla_gpu_enable_tracing'
 #os.environ['JAX_PLATFORMS'] = 'cpu'
