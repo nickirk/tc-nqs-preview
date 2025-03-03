@@ -20,9 +20,7 @@ import tcnqs.trainer_vite as trainer
 from tcnqs.sampler.fssc import FSSC
 import tcnqs.test.test_parameters as t
 
-# import tensorflow as tf
-# logdir = "./logs"
-# os.makedirs(logdir, exist_ok=True)
+
 
 def test_backflow_vite(mol,n_core,num_epochs=2400, test=False ,random_key=17 ):
     if test:

@@ -28,6 +28,10 @@ def test_hamiltonian(mol, test=False):
     
     jax_ham = jax.vmap(jax.vmap(ham._hamiltonian_element, in_axes=(0, None)), in_axes=(None, 0))
     H = jax_ham(x_train, x_train)
+    # for i in range(H.shape[0]):
+    #     for j in range(H.shape[1]):
+    #         if jnp.abs(H[i,j]) < 1e-10:
+    #             H = H.at[i,j].set(0)
 
     if test:            
         fci_e_diagonal = jnp.min(jnp.linalg.eigh(H)[0]) #+ ham.e_core
@@ -50,8 +54,8 @@ def test_setup_hci(mol):
    
 if __name__ == '__main__':
     
-    mol = pyscf.M(
-    atom = 'H 0 0 0; H 0 0 1.0 ;H 0 0 2;',  
+    mol =pyscf.M(
+    atom = 'H 0 0 0; H 0 0 1.0;H 0 0 5;',  
     basis = 'sto-3g',
     spin = 1,
     charge = 0,
