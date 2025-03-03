@@ -34,9 +34,9 @@ def test_hamiltonian(mol, test=False):
         
         e_hf=H[0,0]#+ham.e_core
         print(f"Hamiltonian:{fci_e_diagonal}, Pyscf:{fci_e_pyscf} ") 
-        assert jnp.absolute(myhf.e_tot- e_hf) < 1e-6
+        assert jnp.absolute(myhf.e_tot- e_hf) < 1e-7
         print("Success: HF energies match!")
-        assert jnp.absolute(fci_e_diagonal-fci_e_pyscf) < 2e-6 
+        assert jnp.absolute(fci_e_diagonal-fci_e_pyscf) < 1e-7 
         print("Success: FCI energies match!")
         
         

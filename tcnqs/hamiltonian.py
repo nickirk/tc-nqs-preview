@@ -74,7 +74,7 @@ class Hamiltonian:
         j = diff_index[jnp.nonzero(det2[diff_index], size=1)][0]
         phase_global=self.phase(det1,i) * self.phase(det2,j)
         get_1body = phase_global*self.h1g[i,j]
-        sum_indices = jnp.nonzero(jnp.logical_and(det1, det2),size=self.n_elec)[0]
+        sum_indices = jnp.nonzero(jnp.logical_and(det1, det2),size=self.n_elec-1)[0]
         get_2body = phase_global*jnp.sum(self.g2e[i, sum_indices, sum_indices, j] - self.g2e[i, sum_indices, j, sum_indices])
         return get_1body + get_2body
     
