@@ -4,6 +4,10 @@ import jax
 from jax.tree_util import register_pytree_node_class
 from functools import partial
 
+from matplotlib.pylab import det
+from numpy import diff
+from requests import get
+
 # For documentation to Jax PyTrees:
 # https://jax.readthedocs.io/en/latest/pytrees.html#applying-optional-parameters-to-pytrees
 
@@ -39,18 +43,65 @@ class Hamiltonian:
         return instance
         
     # By convention det1 is the bra and det2 is the ket always
-    # @jax.jit
     def __call__(self, det1, det2):
         det1 = jnp.asarray(det1, dtype=jnp.int8)
         det2 = jnp.asarray(det2, dtype=jnp.int8)
-        return self._get_1body(det1, det2)  + self._get_2body(det1, det2) 
+        return self._hamiltonian_element(det1,det2)#self._get_1body(det1, det2)  + self._get_2body(det1, det2) 
     
-    # @jax.jit
+
     def phase(self,det,j):
-        sum_result = jnp.cumsum(det)[j-1]
-        # sum_result = jnp.sum(det[:j-1])
-        # return sum_result
-        return 1 - 2 * (sum_result % 2)
+        return 1-2*jnp.remainder(jnp.cumsum(det)[j-1],2)
+    
+    def phase_2_pos(self,det,i,j):
+        # Replace by more efficient function later
+        return self.phase(det,i)*self.phase(det,j)
+    
+    @jax.jit
+    def _unexcited_element(self, diff_index, det1, det2):
+        sum_indices = jnp.nonzero(det1 , size=self.n_elec)[0]
+        get_1body = jnp.sum(self.h1g[sum_indices, sum_indices])
+        get_2body =0.5*jnp.sum(self.g2e[sum_indices[:, None], sum_indices, sum_indices, sum_indices[:, None]] - 
+                     self.g2e[sum_indices[:, None], sum_indices, sum_indices[:, None], sum_indices])
+        # A = jnp.sum(self.g2e[sum_indices[:, None], sum_indices, sum_indices, sum_indices[:, None]])
+        # B = jnp.sum(self.g2e[sum_indices[:, None], sum_indices, sum_indices[:, None], sum_indices])
+        # get_2body = 0.5 * (A - B)
+        return  self.e_core  + get_1body + get_2body
+    
+    @jax.jit
+    def _single_excitation_element(self, diff_index, det1, det2):
+        diff_index = diff_index[:2]
+        i = diff_index[jnp.nonzero(det1[diff_index], size=1)][0]
+        j = diff_index[jnp.nonzero(det2[diff_index], size=1)][0]
+        phase_global=self.phase(det1,i) * self.phase(det2,j)
+        get_1body = phase_global*self.h1g[i,j]
+        sum_indices = jnp.nonzero(jnp.logical_and(det1, det2),size=self.n_elec)[0]
+        get_2body = phase_global*jnp.sum(self.g2e[i, sum_indices, sum_indices, j] - self.g2e[i, sum_indices, j, sum_indices])
+        return get_1body + get_2body
+    
+    @jax.jit  
+    def _double_excitation_element(self, diff_index, det1, det2):
+        det1_indices = diff_index[jnp.nonzero(det1[diff_index], size=2)]
+        det2_indices = diff_index[jnp.nonzero(det2[diff_index], size=2)]
+        i = det1_indices[0]
+        k = det1_indices[1]
+        j = det2_indices[0]
+        l = det2_indices[1]
+        
+        phase_global = self.phase_2_pos(det1,i,k)*self.phase_2_pos(det2,j,l)
+        return phase_global*(self.g2e[i, k, l, j] - self.g2e[i, k, j, l])
+       
+
+    def _hamiltonian_element(self, det1, det2):
+        diff = jnp.bitwise_xor(det1, det2)
+        num_diff = jnp.sum(diff,dtype=jnp.int8)
+        diff_index = jnp.nonzero(diff, size=4, fill_value =-1)[0]
+
+        cond_0 = lambda diff_index,det1,det2 : jax.lax.cond(num_diff == 0, self._unexcited_element, 
+                                                            lambda diff_index,det1,det2: 0.0, diff_index,det1,det2)
+        cond_2 = lambda diff_index,det1,det2 : jax.lax.cond(num_diff == 2, self._single_excitation_element, cond_0, diff_index,det1,det2)
+        cond_4 = lambda diff_index,det1,det2 : jax.lax.cond(num_diff == 4, self._double_excitation_element, cond_2, diff_index,det1,det2)
+        
+        return cond_4(diff_index,det1,det2)
     
     @jax.jit
     def _get_1body(self, det1, det2):
@@ -71,7 +122,6 @@ class Hamiltonian:
             phase_global=self.phase(det1,i) * self.phase(det2,j)
             return (phase_global * self.h1g[i,j])
         
-
         return jax.lax.cond(num_diff == 2, 
                                 diff_2,
                         lambda : lax.cond(
@@ -94,13 +144,14 @@ class Hamiltonian:
             return sum_result/2
 
         def diff_2():
-            #diff_index = jnp.nonzero(diff, size=2)[0]
+            # diff_index = jnp.nonzero(diff, size=2)[0]
             # diff_index = jnp.where(diff == jnp.ones_like(diff), size=2)[0]
             diff_index = jnp.nonzero(diff, size=2)[0]
-            k = diff_index[jnp.where(det1[diff_index]==jnp.ones_like(det1[diff_index]),size=1)][0]
-            j = diff_index[jnp.where(det2[diff_index]==jnp.ones_like(det2[diff_index]), size=1)][0]
-            
-            sum_indices = jnp.where(jnp.logical_and(det1, det2),size=self.n_elec-1)[0]
+            # k = diff_index[jnp.where(det1[diff_index]==jnp.ones_like(det1[diff_index]),size=1)][0]
+            # j = diff_index[jnp.where(det2[diff_index]==jnp.ones_like(det2[diff_index]), size=1)][0]
+            k = diff_index[jnp.nonzero(det1[diff_index], size=1)][0]
+            j = diff_index[jnp.nonzero(det2[diff_index], size=1)][0]
+            sum_indices = jnp.nonzero(jnp.logical_and(det1, det2),size=self.n_elec-1)[0]
             
             phase_global=self.phase(det1,k) * self.phase(det2,j)
             
@@ -110,8 +161,10 @@ class Hamiltonian:
             # diff_index = jnp.nonzero(diff,size=4)[0]
             # diff_index = jnp.where(diff == jnp.ones_like(diff), size=4)[0]
             diff_index = jnp.nonzero(diff, size=4)[0]
-            det1_indices = diff_index[jnp.where(det1[diff_index]==jnp.ones_like(det2[diff_index]), size=2)]
-            det2_indices = diff_index[jnp.where(det2[diff_index]==jnp.ones_like(det2[diff_index]), size=2)]
+            # det1_indices = diff_index[jnp.where(det1[diff_index]==jnp.ones_like(det2[diff_index]), size=2)]
+            # det2_indices = diff_index[jnp.where(det2[diff_index]==jnp.ones_like(det2[diff_index]), size=2)]
+            det1_indices = diff_index[jnp.nonzero(det1[diff_index], size=2)]
+            det2_indices = diff_index[jnp.nonzero(det2[diff_index], size=2)]
             i = det1_indices[0]
             k = det1_indices[1]
             j = det2_indices[0]
@@ -119,7 +172,7 @@ class Hamiltonian:
             
             phase_global = self.phase(det1,i)*self.phase(det1,k)*self.phase(det2,j)*self.phase(det2,l)
             
-            #print(phase_global==1)
+    
             
             return phase_global*(self.g2e[i, k, l, j] - self.g2e[i, k, j, l])
 

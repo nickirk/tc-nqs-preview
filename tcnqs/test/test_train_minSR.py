@@ -1,7 +1,7 @@
 import os
 os.environ["JAX_PLATFORM_NAME"] = "cuda"
-os.environ['XLA_PYTHON_CLIENT_MEM_FRACTION'] = '0.8'
-os.environ['CUDA_VISIBLE_DEVICES'] = '0'
+os.environ['XLA_PYTHON_CLIENT_MEM_FRACTION'] = '0.1'
+os.environ['CUDA_VISIBLE_DEVICES'] = '2'
 
 #os.environ['XLA_FLAGS'] = '--xla_gpu_enable_tracing'
 #os.environ['JAX_PLATFORMS'] = 'cpu'
@@ -79,12 +79,12 @@ def test_backflow_vite(mol,n_core,num_epochs=2400, test=False ,random_key=17 ):
     # svd_save = []
     jax.profiler.start_trace("tmp/tensorboard")
     for epoch in range(num_epochs):
-        # a = time.time()
+        a = time.time()
         state_bf, loss_bf, sampler  = trainer.trainer_vite(state_bf, hamiltonian, sampler , solver='MinSR')
         # loss_bf.block_until_ready()
         train_losses_bf.append(loss_bf)
-        # b = time.time()
-        print(f"Epoch: {epoch+1}, Loss_bf: {loss_bf}") #, Time taken: {b-a}
+        b = time.time()
+        print(f"Epoch: {epoch+1}, Loss_bf: {loss_bf} , Time taken: {b-a}") #, Time taken: {b-a}
     # train_losses_bf.block_until_ready()
     jax.device_get(train_losses_bf)
     jax.profiler.stop_trace()

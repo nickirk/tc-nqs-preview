@@ -8,7 +8,7 @@ batch_size = n_core
 hidden_layer_sizes =[16, 16]
 is_tc = False
 mol = pyscf.M(
-    atom = 'N 0 0 0 ; N 0 0 1 ', #  H 0 0 3.0;  H 0 0 4.0 , # H 0 0 3.0; H 0 0 4.0  ,
+    atom = 'N 0 0 0 ; N  0 0 1 ', #  H 0 0 3.0;  H 0 0 4.0 , # H 0 0 3.0; H 0 0 4.0  ,
     basis = 'sto-3g',
     
     spin = 0,

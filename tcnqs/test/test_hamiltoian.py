@@ -1,11 +1,11 @@
 import jax
 import jax.numpy as jnp
-import numpy as np
+# import numpy as np
 import pyscf
-from pyscf.tools import fcidump
+# from pyscf.tools import fcidump
 
 from tcnqs.fcidump import read_2_spin_orbital_seprated as read2
-from tcnqs.hamiltonian import Hamiltonian
+# from tcnqs.hamiltonian import Hamiltonian
 from tcnqs.utils import generate_ci_data, build_ham_from_pyscf
 
 
@@ -26,15 +26,14 @@ def test_hamiltonian(mol, test=False):
     x_train, y_train = generate_ci_data(ham.n_orb//2, ham.n_elec_a, ham.n_elec_b, ci_vector)
     x_train = jnp.asarray(x_train)
     
-    H = np.zeros((len(x_train), len(x_train)), dtype=jnp.float32)
-    for i in range(len(x_train)):
-        for j in range(len(x_train)):
-            H[i,j]=ham(x_train[i], x_train[j])
+    jax_ham = jax.vmap(jax.vmap(ham._hamiltonian_element, in_axes=(0, None)), in_axes=(None, 0))
+    H = jax_ham(x_train, x_train)
+
     if test:            
-        fci_e_diagonal = np.sort(np.linalg.eig(H)[0])[0] #+ ham.e_core
+        fci_e_diagonal = jnp.min(jnp.linalg.eigh(H)[0]) #+ ham.e_core
         
         e_hf=H[0,0]#+ham.e_core
-        print(fci_e_diagonal, fci_e_pyscf) 
+        print(f"Hamiltonian:{fci_e_diagonal}, Pyscf:{fci_e_pyscf} ") 
         assert jnp.absolute(myhf.e_tot- e_hf) < 1e-6
         print("Success: HF energies match!")
         assert jnp.absolute(fci_e_diagonal-fci_e_pyscf) < 2e-6 
