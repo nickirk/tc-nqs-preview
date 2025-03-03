@@ -1,8 +1,7 @@
-from numpy import save
 import pyscf 
 
 learning_rate =0.01
-num_epochs = 20
+num_epochs = 10
 n_core = 4096
 batch_size = n_core
 hidden_layer_sizes =[16, 16]

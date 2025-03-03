@@ -1,3 +1,4 @@
+from turtle import pos
 import jax.numpy as jnp
 from jax import jit, lax
 import jax
@@ -43,10 +44,11 @@ class Hamiltonian:
         return instance
         
     # By convention det1 is the bra and det2 is the ket always
+    # @jax.jit
     def __call__(self, det1, det2):
         det1 = jnp.asarray(det1, dtype=jnp.int8)
         det2 = jnp.asarray(det2, dtype=jnp.int8)
-        return self._hamiltonian_element(det1,det2)#self._get_1body(det1, det2)  + self._get_2body(det1, det2) 
+        return self._hamiltonian_element(det1,det2) #self._get_1body(det1, det2)  + self._get_2body(det1, det2) 
     
 
     def phase(self,det,j):
@@ -57,8 +59,8 @@ class Hamiltonian:
         return self.phase(det,i)*self.phase(det,j)
     
     @jax.jit
-    def _unexcited_element(self, diff_index, det1, det2):
-        sum_indices = jnp.nonzero(det1 , size=self.n_elec)[0]
+    def _unexcited_element(self, elec_pos_det1,pos_excite,pos_holes, det1, det2):
+        sum_indices = elec_pos_det1 #jnp.nonzero(det1 , size=self.n_elec)[0]
         get_1body = jnp.sum(self.h1g[sum_indices, sum_indices])
         get_2body =0.5*jnp.sum(self.g2e[sum_indices[:, None], sum_indices, sum_indices, sum_indices[:, None]] - 
                      self.g2e[sum_indices[:, None], sum_indices, sum_indices[:, None], sum_indices])
@@ -68,40 +70,65 @@ class Hamiltonian:
         return  self.e_core  + get_1body + get_2body
     
     @jax.jit
-    def _single_excitation_element(self, diff_index, det1, det2):
-        diff_index = diff_index[:2]
-        i = diff_index[jnp.nonzero(det1[diff_index], size=1)][0]
-        j = diff_index[jnp.nonzero(det2[diff_index], size=1)][0]
+    def _single_excitation_element(self, elec_pos_det1,pos_excite,pos_holes, det1, det2):
+        # diff_index = diff_index[:2]
+        # i = diff_index[jnp.nonzero(det1[diff_index], size=1)][0]
+        # j = diff_index[jnp.nonzero(det2[diff_index], size=1)][0]
+        i = pos_excite[0]
+        j = pos_holes[0]
         phase_global=self.phase(det1,i) * self.phase(det2,j)
         get_1body = phase_global*self.h1g[i,j]
-        sum_indices = jnp.nonzero(jnp.logical_and(det1, det2),size=self.n_elec-1)[0]
+        #sum_indices = jnp.nonzero(jnp.logical_and(det1, det2),size=self.n_elec-1)[0]
+        sum_indices = elec_pos_det1
         get_2body = phase_global*jnp.sum(self.g2e[i, sum_indices, sum_indices, j] - self.g2e[i, sum_indices, j, sum_indices])
         return get_1body + get_2body
     
     @jax.jit  
-    def _double_excitation_element(self, diff_index, det1, det2):
-        det1_indices = diff_index[jnp.nonzero(det1[diff_index], size=2)]
-        det2_indices = diff_index[jnp.nonzero(det2[diff_index], size=2)]
-        i = det1_indices[0]
-        k = det1_indices[1]
-        j = det2_indices[0]
-        l = det2_indices[1]
-        
+    def _double_excitation_element(self, elec_pos_det1,pos_excite,pos_holes, det1, det2):
+        # det1_indices = diff_index[jnp.nonzero(det1[diff_index], size=2)]
+        # det2_indices = diff_index[jnp.nonzero(det2[diff_index], size=2)]
+        # i = det1_indices[0]
+        # k = det1_indices[1]
+        # j = det2_indices[0]
+        # l = det2_indices[1]
+        i,k = pos_excite
+        j,l = pos_holes
         phase_global = self.phase_2_pos(det1,i,k)*self.phase_2_pos(det2,j,l)
         return phase_global*(self.g2e[i, k, l, j] - self.g2e[i, k, j, l])
        
-
+    @jax.jit
     def _hamiltonian_element(self, det1, det2):
         diff = jnp.bitwise_xor(det1, det2)
         num_diff = jnp.sum(diff,dtype=jnp.int8)
-        diff_index = jnp.nonzero(diff, size=4, fill_value =-1)[0]
+        # diff_index = jnp.nonzero(diff, size=4, fill_value =-1)[0]
+        elec_pos_det1 = jnp.nonzero(det1, size=self.n_elec)[0]
+        pos_excite = jnp.nonzero(jnp.logical_and(det1,diff),size=2,fill_value =-1)[0]
+        pos_holes = jnp.nonzero(jnp.logical_and(det2,diff),size=2,fill_value =-1)[0]
 
-        cond_0 = lambda diff_index,det1,det2 : jax.lax.cond(num_diff == 0, self._unexcited_element, 
-                                                            lambda diff_index,det1,det2: 0.0, diff_index,det1,det2)
-        cond_2 = lambda diff_index,det1,det2 : jax.lax.cond(num_diff == 2, self._single_excitation_element, cond_0, diff_index,det1,det2)
-        cond_4 = lambda diff_index,det1,det2 : jax.lax.cond(num_diff == 4, self._double_excitation_element, cond_2, diff_index,det1,det2)
+        input_tuple = (elec_pos_det1,pos_excite,pos_holes, det1, det2)
+        # cond_0 = lambda input_tuple: jax.lax.cond(
+        #     num_diff == 0,
+        #     lambda op: self._unexcited_element(*op),
+        #     lambda op: 0.0,
+        #     input_tuple
+        # )
+        cond_0 = lambda op: jax.lax.cond(
+            num_diff == 0,
+            lambda op: self._unexcited_element(*op),
+            lambda op: 0.0,
+            op)
+        cond_2 = lambda op: jax.lax.cond(
+            num_diff == 2,
+            lambda op: self._single_excitation_element(*op),
+            cond_0,
+            op)
+        cond_4 = lambda op: jax.lax.cond(
+            num_diff == 4,
+            lambda op: self._double_excitation_element(*op),
+            cond_2,
+            op)
         
-        return cond_4(diff_index,det1,det2)
+        return cond_4(input_tuple)
     
     @jax.jit
     def _get_1body(self, det1, det2):
