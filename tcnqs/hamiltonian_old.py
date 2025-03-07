@@ -2,12 +2,7 @@ import jax.numpy as jnp
 import jax
 from jax.tree_util import register_pytree_node_class
 from functools import partial
-from  itertools import combinations
-from numpy import double, single
-from scipy.special import comb
 
-from tcnqs import hamiltonian
-from tcnqs.sampler.stoch_gen import possible_excitations, single_excitations
 
 # For documentation to Jax PyTrees:
 # https://jax.readthedocs.io/en/latest/pytrees.html#applying-optional-parameters-to-pytrees
@@ -96,30 +91,40 @@ class Hamiltonian:
 
     @classmethod
     def tree_unflatten(cls, static, dynamic):
-       
+        # Reconstruct the class with static fields, dynamic can be ignored if empty
         instance = cls(*static[:6])
         instance.n_elec = static[6]
         instance.sorted_g2e , instance.sorted_inds = static[7:]
+
         return instance
-    
+        
+    # By convention det1 is the bra and det2 is the ket always
+    # @jax.jit
     def __call__(self, det1, det2):
         det1 = jnp.asarray(det1, dtype=jnp.int8)
         det2 = jnp.asarray(det2, dtype=jnp.int8)
-        return self._hamiltonian_element(det1,det2)
+        return self._hamiltonian_element(det1,det2) #self._get_1body(det1, det2)  + self._get_2body(det1, det2) 
+    #self._hamiltonian_element(det1,det2) #
 
     def phase(self,det,j):
         return 1-2*jnp.remainder(jnp.cumsum(det)[j-1],2)
     
     def phase_2_pos(self,det,i,j):
+        # Replace by more efficient function later
+        # return self.phase(det,i)*self.phase(det,j)
         cumsum = jnp.cumsum(det)
         return 1-2*jnp.remainder(cumsum[j-1]-cumsum[i-1],2)
     
+    # @jax.jit
     def _unexcited_element(self, elec_pos_det1,pos_excite,pos_holes, det1, det2):
+        # elec_pos_det1 = elec_pos_det1 
         get_1body = jnp.sum(self.h1g[elec_pos_det1, elec_pos_det1])
         get_2body =0.5*jnp.sum(self.g2e[elec_pos_det1[:, None], elec_pos_det1, elec_pos_det1, elec_pos_det1[:, None]] - 
                      self.g2e[elec_pos_det1[:, None], elec_pos_det1, elec_pos_det1[:, None], elec_pos_det1])
+        
         return  self.e_core  + get_1body + get_2body
     
+    # @jax.jit
     def _single_excitation_element(self, elec_pos_det1,pos_excite,pos_holes, det1, det2):
         i = pos_excite[0]
         j = pos_holes[0]
@@ -131,28 +136,14 @@ class Hamiltonian:
         #- (self.g2e[i, i, i, j] - self.g2e[i, i, j, i]) 
         return phase*(get_1body + get_2body)
     
+    # @jax.jit  
     def _double_excitation_element(self, elec_pos_det1,pos_excite,pos_holes, det1, det2):        
         i,k = pos_excite
         j,l = pos_holes
-        phase_global =self.phase_2_pos(det1,i,k)*self.phase_2_pos(det2,j,l) 
-        return phase_global*(self.g2e[i, k, l, j] - self.g2e[i, k, j, l])
-    
-    def ham_unexcited_element(self, elec_pos_det1):
-        get_1body = jnp.sum(self.h1g[elec_pos_det1, elec_pos_det1])
-        get_2body =0.5*jnp.sum(self.g2e[elec_pos_det1[:, None], elec_pos_det1, elec_pos_det1, elec_pos_det1[:, None]] - 
-                     self.g2e[elec_pos_det1[:, None], elec_pos_det1, elec_pos_det1[:, None], elec_pos_det1])
-        return  self.e_core  + get_1body + get_2body
-    
-    def ham_single_excitation_element(self, elec_pos_det1, pos_excite,pos_holes, det1, det2):
-        phase = self.phase(det1,pos_excite) * self.phase(det2,pos_holes)
-        get_1body = self.h1g[pos_excite,pos_holes]
-        get_2body = jnp.sum(self.g2e[pos_excite, elec_pos_det1, elec_pos_det1, pos_holes] - self.g2e[pos_excite, elec_pos_det1, pos_holes, elec_pos_det1]) 
-        return phase*(get_1body + get_2body)
-    
-    def ham_double_excitation_element(self, pos_excite, pos_holes, det1, det2):        
-        i,k = pos_excite
-        j,l = pos_holes
-        phase_global =self.phase_2_pos(det1,i,k)*self.phase_2_pos(det2,j,l)
+        phase_global =self.phase_2_pos(det1,i,k)*self.phase_2_pos(det2,j,l) #self.phase(det1,i)*self.phase(det1,k)*self.phase(det2,j)*self.phase(det2,l)
+        #self.phase_2_pos(det1,i,k)*self.phase_2_pos(det2,j,l)
+        
+        # jax.debug.print("{tuple}",tuple=(det1,det2,phase_global))
         return phase_global*(self.g2e[i, k, l, j] - self.g2e[i, k, j, l])
        
     @jax.jit
@@ -175,6 +166,7 @@ class Hamiltonian:
         diff = jnp.bitwise_xor(det1, det2)
         num_diff = jnp.sum(diff,dtype=jnp.int8)
         elec_pos_det1 = jnp.nonzero(det1, size=self.n_elec)[0]
+        # elec_pos_det1 = jnp.ones_like(det1[:7])
         pos_excite = jnp.nonzero(jnp.logical_and(det1,diff),size=2,fill_value =-1)[0]
         pos_holes = jnp.nonzero(jnp.logical_and(det2,diff),size=2,fill_value =-1)[0]
         input_tuple = (elec_pos_det1,pos_excite,pos_holes, det1, det2)
@@ -196,88 +188,74 @@ class Hamiltonian:
             op)
         
         return cond_4(input_tuple)
-
-    # @jax.jit
-
     
-    def hamiltonian_and_connections(self, det):
-        return jax.lax.cond(jnp.sum(det)==self.n_elec_a+self.n_elec_b,self.generate_hamiltonian_and_connections ,self.padded_elements, det)
+    @jax.jit
+    def _get_1body(self, det1, det2):
+        diff = jnp.bitwise_xor(det1, det2)
+        num_diff = jnp.sum(diff,dtype=jnp.int8)
+
+        def diff_0():
+            sum_indices = jnp.nonzero(det1 , size=self.n_elec)[0]
+            return jnp.sum(self.h1g[sum_indices, sum_indices]) + self.e_core
+
+        def diff_2():
+           
+            diff_index = jnp.nonzero(diff, size=2)[0]
+            i = diff_index[jnp.nonzero(det1[diff_index], size=1)][0]
+            j = diff_index[jnp.nonzero(det2[diff_index], size=1)][0]
+            phase_global=self.phase(det1,i) * self.phase(det2,j)
+            return (phase_global * self.h1g[i,j])
+        
+        return jax.lax.cond(num_diff == 2, 
+                                diff_2,
+                        lambda : jax.lax.cond(
+                        num_diff == 0, diff_0, lambda : 0.0))
 
     @jax.jit
-    def generate_hamiltonian_and_connections(self, det: jnp.array):
-        n_spa_orb = self.n_orb // 2
-        n_holes_a = n_spa_orb - self.n_elec_a
-        n_holes_b = n_spa_orb - self.n_elec_b
-        
-        particles_pos = jnp.nonzero(det, size=self.n_elec)[0]
-        holes_pos = jnp.where(det == 0, size=n_holes_a+n_holes_b)[0]
+    def _get_2body(self, det1, det2):
+        diff = jnp.bitwise_xor(det1, det2)
+        num_diff = jnp.sum(diff, dtype=jnp.int8)
 
-        ham_and_det = self.excitation_0(det, particles_pos)
+        def diff_0():
+            sum_indices = jnp.nonzero(det1 , size=self.n_elec)[0]
+            sum_result = jnp.sum(self.g2e[sum_indices[:, None], sum_indices, sum_indices, sum_indices[:, None]] - 
+                     self.g2e[sum_indices[:, None], sum_indices, sum_indices[:, None], sum_indices]) 
+            return sum_result/2
 
-        if self.n_elec_a > 0 and n_holes_a > 0:
-            single_particle_hole_pair_a = self.single_excitations(particles_pos[:self.n_elec_a], holes_pos[:n_holes_a])
-            ham_and_det = jax.tree.map(lambda x,y: jnp.concatenate((x,y), axis=0),ham_and_det, self.excitation_1(det, particles_pos, single_particle_hole_pair_a))
-        
-        if self.n_elec_b > 0 and n_holes_b > 0:
-            single_particle_hole_pair_b = self.single_excitations(particles_pos[self.n_elec_a:], holes_pos[n_holes_a:])
-            ham_and_det = jax.tree.map(lambda x,y: jnp.concatenate((x,y), axis=0),ham_and_det, self.excitation_1(det, particles_pos, single_particle_hole_pair_b))
-        
-        if (self.n_elec_a > 0 and n_holes_a > 0) and (self.n_elec_b > 0 and n_holes_b > 0) :
-            pairs_double_exictations_combined = self.possible_excitations(single_particle_hole_pair_a, single_particle_hole_pair_b)
-            ham_and_det = jax.tree.map(lambda x,y: jnp.concatenate((x,y), axis=0),ham_and_det, self.excitation_2(det, pairs_double_exictations_combined))
-        
-        if self.n_elec_a > 1 and n_holes_a > 1:
-            double_particle_hole_pair_a = self.double_excitations(particles_pos[:self.n_elec_a], holes_pos[:n_holes_a])
-            ham_and_det = jax.tree.map(lambda x,y: jnp.concatenate((x,y), axis=0),ham_and_det, self.excitation_2(det, double_particle_hole_pair_a))
-        if self.n_elec_b > 1 and n_holes_b > 1:
-            double_particle_hole_pair_b = self.double_excitations(particles_pos[self.n_elec_a:], holes_pos[n_holes_a:])
-            ham_and_det =jax.tree.map(lambda x,y: jnp.concatenate((x,y), axis=0),ham_and_det, self.excitation_2(det, double_particle_hole_pair_b))
+        def diff_2():
 
-        return ham_and_det
+            diff_index = jnp.nonzero(diff, size=2)[0]
+           
+            k = diff_index[jnp.nonzero(det1[diff_index], size=1)][0]
+            j = diff_index[jnp.nonzero(det2[diff_index], size=1)][0]
+            sum_indices = jnp.nonzero(jnp.logical_and(det1, det2),size=self.n_elec-1)[0]
+            
+            phase_global = self.phase(det1,k) * self.phase(det2,j)
+            
+            return phase_global*jnp.sum(self.g2e[k, sum_indices, sum_indices, j] - self.g2e[k, sum_indices, j, sum_indices])
 
-    def padded_elements(self,det):
-        n_spa_orb = self.n_orb // 2
-        num_connections = (1 +  comb(self.n_elec_a, 2, exact=True) * comb(n_spa_orb - self.n_elec_a, 2, exact=True) +
-                                comb(self.n_elec_b, 2, exact=True) * comb(n_spa_orb - self.n_elec_b, 2, exact=True) +
-                                self.n_elec_a * self.n_elec_b * (n_spa_orb - self.n_elec_a) * (n_spa_orb - self.n_elec_b) +
-                                n_spa_orb * (self.n_elec_a + self.n_elec_b) - self.n_elec_a ** 2 - self.n_elec_b ** 2)
-        return jnp.zeros(num_connections), jnp.zeros((num_connections, self.n_orb), dtype=jnp.int8)
+        def diff_4():
 
-    def possible_excitations(self, pairs_alpha, pairs_beta):
-        i, j = jnp.meshgrid(jnp.arange(len(pairs_alpha)), jnp.arange(len(pairs_beta)), indexing='ij')
-        pairs_excitations= jnp.concatenate((pairs_alpha[i], pairs_beta[j]), axis=2).reshape(-1, 4)
-        return pairs_excitations[:, [0, 2, 1, 3]]
+            diff_index = jnp.nonzero(diff, size=4)[0]
+           
+            det1_indices = diff_index[jnp.nonzero(det1[diff_index], size=2)]
+            det2_indices = diff_index[jnp.nonzero(det2[diff_index], size=2)]
+            i = det1_indices[0]
+            k = det1_indices[1]
+            j = det2_indices[0]
+            l = det2_indices[1]
+            
+            phase_global = self.phase(det1,i)*self.phase(det1,k)*self.phase(det2,j)*self.phase(det2,l)
+            
     
-    def single_excitations(self, particle_pos, hole_pos):
-        i, j = jnp.meshgrid(particle_pos, hole_pos, indexing='ij')
-        particle_hole_pairs = jnp.array([i, j]).reshape(2, -1).T
-        return particle_hole_pairs
+            
+            return phase_global*(self.g2e[i, k, l, j] - self.g2e[i, k, j, l])
 
-    def create_excited_state(self, particle_pos, hole_pos, determinant):
-        return determinant.at[particle_pos].set(0).at[hole_pos].set(1)
-
-    def double_excitations(self, particle_pos, hole_pos):
-        particles_select = jnp.asarray(list(combinations(particle_pos, 2)))
-        holes_select = jnp.asarray(list(combinations(hole_pos, 2)))
-        i, j = jnp.meshgrid(jnp.arange(len(particles_select)),
-                            jnp.arange(len(holes_select)), indexing='ij')
-        particle_hole_pairs = jnp.concatenate((particles_select[i], holes_select[j]), axis=2).reshape(-1, 4)
-        return particle_hole_pairs
-
-    def excitation_0(self, det, electron_positions):
-        return jnp.expand_dims(self.ham_unexcited_element(electron_positions), axis=0), jnp.expand_dims(det, axis=0)
-
-    @partial(jax.vmap, in_axes=(None,None,None,0))    
-    def excitation_1(self,det, elec_pos_det, particle_hole_pairs):
-        det2 = self.create_excited_state(particle_hole_pairs[0], particle_hole_pairs[1], det)
-        return self.ham_single_excitation_element(elec_pos_det,particle_hole_pairs[0] , particle_hole_pairs[1], det, det2), det2
-
-    @partial(jax.vmap, in_axes=(None,None,0))    
-    def excitation_2(self,det, particle_holes_pairs):
-        det2 = self.create_excited_state(particle_holes_pairs[:2], particle_holes_pairs[2:], det)
-        return self.ham_double_excitation_element(particle_holes_pairs[:2], particle_holes_pairs[2:], det, det2), det2
+        return jax.lax.cond(num_diff == 4, 
+                        diff_4,
+                        lambda : jax.lax.cond(num_diff == 2, diff_2, 
+                                           lambda : jax.lax.cond(num_diff == 0, diff_0, lambda : 0.0)))
     
-
     def setup_hci(self) -> jnp.ndarray:
         # Generate all the pairs of indices
         # can use jnp.meshgrid
@@ -307,73 +285,3 @@ class Hamiltonian:
 
 
         return max_element, sorted_elements, sorted_indices
-    
-
-    ### OLD
-    # @jax.jit
-    # def _get_1body(self, det1, det2):
-    #     diff = jnp.bitwise_xor(det1, det2)
-    #     num_diff = jnp.sum(diff,dtype=jnp.int8)
-
-    #     def diff_0():
-    #         sum_indices = jnp.nonzero(det1 , size=self.n_elec)[0]
-    #         return jnp.sum(self.h1g[sum_indices, sum_indices]) + self.e_core
-
-    #     def diff_2():
-           
-    #         diff_index = jnp.nonzero(diff, size=2)[0]
-    #         i = diff_index[jnp.nonzero(det1[diff_index], size=1)][0]
-    #         j = diff_index[jnp.nonzero(det2[diff_index], size=1)][0]
-    #         phase_global=self.phase(det1,i) * self.phase(det2,j)
-    #         return (phase_global * self.h1g[i,j])
-        
-    #     return jax.lax.cond(num_diff == 2, 
-    #                             diff_2,
-    #                     lambda : jax.lax.cond(
-    #                     num_diff == 0, diff_0, lambda : 0.0))
-
-    # @jax.jit
-    # def _get_2body(self, det1, det2):
-    #     diff = jnp.bitwise_xor(det1, det2)
-    #     num_diff = jnp.sum(diff, dtype=jnp.int8)
-
-    #     def diff_0():
-    #         sum_indices = jnp.nonzero(det1 , size=self.n_elec)[0]
-    #         sum_result = jnp.sum(self.g2e[sum_indices[:, None], sum_indices, sum_indices, sum_indices[:, None]] - 
-    #                  self.g2e[sum_indices[:, None], sum_indices, sum_indices[:, None], sum_indices]) 
-    #         return sum_result/2
-
-    #     def diff_2():
-
-    #         diff_index = jnp.nonzero(diff, size=2)[0]
-           
-    #         k = diff_index[jnp.nonzero(det1[diff_index], size=1)][0]
-    #         j = diff_index[jnp.nonzero(det2[diff_index], size=1)][0]
-    #         sum_indices = jnp.nonzero(jnp.logical_and(det1, det2),size=self.n_elec-1)[0]
-            
-    #         phase_global = self.phase(det1,k) * self.phase(det2,j)
-            
-    #         return phase_global*jnp.sum(self.g2e[k, sum_indices, sum_indices, j] - self.g2e[k, sum_indices, j, sum_indices])
-
-    #     def diff_4():
-
-    #         diff_index = jnp.nonzero(diff, size=4)[0]
-           
-    #         det1_indices = diff_index[jnp.nonzero(det1[diff_index], size=2)]
-    #         det2_indices = diff_index[jnp.nonzero(det2[diff_index], size=2)]
-    #         i = det1_indices[0]
-    #         k = det1_indices[1]
-    #         j = det2_indices[0]
-    #         l = det2_indices[1]
-            
-    #         phase_global = self.phase(det1,i)*self.phase(det1,k)*self.phase(det2,j)*self.phase(det2,l)
-            
-    
-            
-    #         return phase_global*(self.g2e[i, k, l, j] - self.g2e[i, k, j, l])
-
-    #     return jax.lax.cond(num_diff == 4, 
-    #                     diff_4,
-    #                     lambda : jax.lax.cond(num_diff == 2, diff_2, 
-    #                                        lambda : jax.lax.cond(num_diff == 0, diff_0, lambda : 0.0)))
-

@@ -1,7 +1,7 @@
 import os
 os.environ["JAX_PLATFORM_NAME"] = "cuda"
-os.environ['XLA_PYTHON_CLIENT_MEM_FRACTION'] = '0.1'
-os.environ['CUDA_VISIBLE_DEVICES'] = '0'
+os.environ['XLA_PYTHON_CLIENT_MEM_FRACTION'] = '0.9'
+os.environ['CUDA_VISIBLE_DEVICES'] = '1'
 
 #os.environ['XLA_FLAGS'] = '--xla_gpu_enable_tracing'
 #os.environ['JAX_PLATFORMS'] = 'cpu'
@@ -33,7 +33,7 @@ def test_backflow_vite(mol,n_core,num_epochs=2400, test=False ,random_key=17 ):
     cisolver = pyscf.fci.FCI(myhf)
     print("E FCI = ", fci_e_pyscf)
  
-    hamiltonian = build_ham_from_pyscf(mol, myhf)
+    hamiltonian = build_ham_from_pyscf(mol, myhf, is_tc=t.is_tc)
     
     
     num_orbitals = hamiltonian.n_orb
@@ -78,11 +78,11 @@ def test_backflow_vite(mol,n_core,num_epochs=2400, test=False ,random_key=17 ):
     jax.profiler.start_trace("tmp/tensorboard")
     for epoch in range(num_epochs):
         a = time.time()
-        state_bf, loss_bf, sampler  = trainer.trainer_vite(state_bf, hamiltonian, sampler , solver='MinSR')
+        state_bf, loss_bf, sampler  = trainer.trainer_vite(state_bf, hamiltonian, sampler , solver='SR')
         # loss_bf.block_until_ready()
         train_losses_bf.append(loss_bf)
         b = time.time()
-        print(f"Epoch: {epoch+1}, Loss_bf: {loss_bf} , Time taken: {b-a}") #, Time taken: {b-a}
+        print(f"Epoch: {epoch+1}, Loss_bf: {loss_bf}, Time taken: {b-a} ") #, Time taken: {b-a}
     # train_losses_bf.block_until_ready()
     jax.device_get(train_losses_bf)
     jax.profiler.stop_trace()
@@ -96,7 +96,7 @@ if __name__ == '__main__':
     losses , fci_e_pyscf = test_backflow_vite(mol , random_key=15,n_core=t.n_core,num_epochs=t.num_epochs, test= True)
     if t.save:
         print("Saving to file")
-        jnp.save(f"tcnqs/simulations/minSR1_{mol.atom_symbol(0)+mol.atom_symbol(1)}_lr={t.learning_rate}_ncore={t.n_core}.npy",jnp.array(losses))
-        jnp.save(f"tcnqs/simulations/fci_{mol.atom_symbol(0)+mol.atom_symbol(1)}.npy",jnp.array(fci_e_pyscf))
+        jnp.save(f"tcnqs/simulations/minSR1_{mol.atom_symbol(0)}_lr={t.learning_rate}_ncore={t.n_core}.npy",jnp.array(losses))
+        jnp.save(f"tcnqs/simulations/fci_{mol.atom_symbol(0)}.npy",jnp.array(fci_e_pyscf))
     end = time.time()
     print("Time taken: ", end-start)

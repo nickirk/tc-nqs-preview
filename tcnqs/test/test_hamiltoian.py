@@ -1,3 +1,5 @@
+import os
+os.environ['CUDA_VISIBLE_DEVICES'] = '1'
 import jax
 import jax.numpy as jnp
 # import numpy as np
@@ -26,7 +28,7 @@ def test_hamiltonian(mol, test=False):
     x_train, y_train = generate_ci_data(ham.n_orb//2, ham.n_elec_a, ham.n_elec_b, ci_vector)
     x_train = jnp.asarray(x_train)
     
-    jax_ham = jax.vmap(jax.vmap(ham._hamiltonian_element, in_axes=(0, None)), in_axes=(None, 0))
+    jax_ham = jax.vmap(jax.vmap(ham, in_axes=(0, None)), in_axes=(None, 0))
     H = jax_ham(x_train, x_train)
     # for i in range(H.shape[0]):
     #     for j in range(H.shape[1]):
@@ -43,7 +45,13 @@ def test_hamiltonian(mol, test=False):
         assert jnp.absolute(fci_e_diagonal-fci_e_pyscf) < 1e-7 
         print("Success: FCI energies match!")
         
+def test_hamiltonian_refactor(mol, test=False):
+    if test:
+        jax.config.update("jax_enable_x64", True)
         
+    myhf = mol.RHF().run()
+    ham = build_ham_from_pyscf(mol, myhf)
+    
 
 def test_setup_hci(mol):
     myhf = mol.RHF().run()

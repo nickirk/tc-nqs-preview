@@ -61,8 +61,8 @@ def create_model(rng, input_shape, num_electrons, hidden_layer_sizes,
     model = Backflow(num_orbital=input_shape, num_electron=num_electrons,  n_bf_dets= n_bf_dets,
                      hidden_layer_sizes=hidden_layer_sizes,
                      activation=activation)
-    initial=jnp.concatenate((jnp.ones(num_electrons,dtype=jnp.uint8),
-                            jnp.zeros(input_shape-num_electrons,dtype=jnp.uint8)),
+    initial=jnp.concatenate((jnp.ones(num_electrons,dtype=jnp.int8),
+                            jnp.zeros(input_shape-num_electrons,dtype=jnp.int8)),
                             axis=0)
     initial=jnp.reshape(initial,(1,input_shape))
     variables = model.init(rng,initial)#initializer=normal 

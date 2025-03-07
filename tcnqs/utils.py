@@ -100,7 +100,7 @@ def generate_fci_dump(myhf, filename:str, is_tc:bool):
         h2e_xtc = my_xtc.get_2b()
         ecore_xtc = my_xtc.get_const()
         n_orb_xtc = h1e_xtc.shape[0]
-        n_elec_xtc = mol.nelec[0]
+        n_elec_xtc = mol.nelectron
         
         fcidump_pytc.write_fcidump(filename, h1e_xtc, h2e_xtc, ecore_xtc, n_orb_xtc, n_elec_xtc)
 

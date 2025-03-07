@@ -13,7 +13,7 @@ from tcnqs.test.test_parameters import learning_rate
 from tcnqs.trainer import energy 
 
 
-# @jax.jit
+@jax.jit
 def energy_fn(state, hamiltonian: Hamiltonian, sampler: FSSC):
     """
     Computes the local energy and prepares new sampling points.
@@ -145,9 +145,9 @@ def MinSR(jacobian, E_loc):
     Returns:
         jnp.ndarray: Computed gradients using pseudo-inverse.
     """
-    Tij = jacobian @ jacobian.T
+    Tij = jacobian @ jacobian.T+1e-7 * jnp.eye(jacobian.shape[0])
     B_i = E_loc
-    grads = jacobian.T @ jnp.linalg.pinv(Tij, rcond=5e-8, hermitian=True) @ B_i
+    grads = jacobian.T @ jax.scipy.sparse.linalg.cg(Tij, B_i ,maxiter=10)[0] #@ B_i
     return grads
 
 def projected_SR(jacobian, E_loc, proj_matrix):
