@@ -5,6 +5,7 @@ from functools import partial
 from  itertools import combinations
 from numpy import double, single
 from scipy.special import comb
+from zmq import DeviceType
 
 from tcnqs import hamiltonian
 from tcnqs.sampler.stoch_gen import possible_excitations, single_excitations
@@ -201,7 +202,8 @@ class Hamiltonian:
 
     
     def hamiltonian_and_connections(self, det):
-        return jax.lax.cond(jnp.sum(det)==self.n_elec_a+self.n_elec_b,self.generate_hamiltonian_and_connections ,self.padded_elements, det)
+        return self.generate_hamiltonian_and_connections(det) 
+    #   return jax.lax.cond(jnp.sum(det)==self.n_elec_a+self.n_elec_b,self.generate_hamiltonian_and_connections ,self.padded_elements, det)
 
     @jax.jit
     def generate_hamiltonian_and_connections(self, det: jnp.array):

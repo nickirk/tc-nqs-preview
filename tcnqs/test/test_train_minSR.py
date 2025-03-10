@@ -1,7 +1,7 @@
 import os
 os.environ["JAX_PLATFORM_NAME"] = "cuda"
 os.environ['XLA_PYTHON_CLIENT_MEM_FRACTION'] = '0.9'
-os.environ['CUDA_VISIBLE_DEVICES'] = '1'
+os.environ['CUDA_VISIBLE_DEVICES'] = '0'
 
 #os.environ['XLA_FLAGS'] = '--xla_gpu_enable_tracing'
 #os.environ['JAX_PLATFORMS'] = 'cpu'
@@ -28,10 +28,10 @@ def test_backflow_vite(mol,n_core,num_epochs=2400, test=False ,random_key=17 ):
         jax.config.update("jax_debug_nans", True)
     rng = random.PRNGKey(random_key)
     myhf = mol.RHF().run()
-    cisolver = pyscf.fci.FCI(myhf)
-    fci_e_pyscf, ci_vector=cisolver.kernel()
-    cisolver = pyscf.fci.FCI(myhf)
-    print("E FCI = ", fci_e_pyscf)
+    # cisolver = pyscf.fci.FCI(myhf)
+    # fci_e_pyscf, ci_vector=cisolver.kernel()
+    # cisolver = pyscf.fci.FCI(myhf)
+    # print("E FCI = ", fci_e_pyscf)
  
     hamiltonian = build_ham_from_pyscf(mol, myhf, is_tc=t.is_tc)
     
@@ -49,7 +49,7 @@ def test_backflow_vite(mol,n_core,num_epochs=2400, test=False ,random_key=17 ):
 
     n_s_orb = (hamiltonian.n_orb//2)
     n_total_dets = comb(n_s_orb, hamiltonian.n_elec_a,exact=True)*comb(n_s_orb, hamiltonian.n_elec_b ,exact=True)
-    batch_size = t.batch_size
+    batch_size = t.n_batch
     
     if n_core > n_total_dets:
         n_core = n_total_dets
@@ -58,7 +58,7 @@ def test_backflow_vite(mol,n_core,num_epochs=2400, test=False ,random_key=17 ):
         batch_size =n_core
         print(f"Warning: n_core specified is less than batch_size. Falling back to batch_size ={batch_size}")
     if n_core % batch_size != 0:
-        n_core = n_core - n_core % t.batch_size
+        n_core = n_core - n_core % t.n_batch
         print(f"Warning: n_core specified is not a multiple of batch_size. Falling back to n_core ={n_core}")
 
     n_connections= (1 + comb(hamiltonian.n_elec_a,2, exact=True)*

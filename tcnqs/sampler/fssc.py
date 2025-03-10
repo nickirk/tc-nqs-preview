@@ -73,7 +73,15 @@ class FSSC(Sampler):
 
     # @jax.jit 
     def next_sample_stored(self, hamiltonian :Hamiltonian) -> jnp.ndarray:   #input: state instead of params,last_sample
-        ham_stored, connected_space = jax.vmap(hamiltonian.generate_hamiltonian_and_connections, in_axes =(0))(self.core_space)
+        # ham_stored, connected_space = jax.vmap(hamiltonian.generate_hamiltonian_and_connections, in_axes =(0))(self.core_space)
+        def batched_ham_connections(carry, dets):
+            function = jax.vmap(hamiltonian.generate_hamiltonian_and_connections, in_axes =(0))
+            return carry, function(dets)
+        init_dets = self.core_space.reshape(-1,self.n_batch,self.n_spac_orb)
+        _ ,(ham_stored, connected_space) = jax.lax.scan(batched_ham_connections, None , init_dets)
+        connected_space = connected_space.reshape(self.n_core,-1,self.n_spac_orb)
+        ham_stored = ham_stored.reshape(self.n_core,-1)
+
         return self._full_space_(connected_space),ham_stored #,self.ham_stored(self.core_space, hamiltonian)
     
 

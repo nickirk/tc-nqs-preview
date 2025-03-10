@@ -45,7 +45,7 @@ def test_backflow_batched(mol, n_core, num_epochs=2400, test=False, random_key=1
     n_s_orb = (hamiltonian.n_orb//2)
     n_total_dets = comb(n_s_orb, hamiltonian.n_elec_a, exact=True)
     n_total_dets *= comb(n_s_orb, hamiltonian.n_elec_b, exact=True)
-    batch_size = t.batch_size
+    batch_size = t.n_batch
     
     if n_core > n_total_dets:
         n_core = n_total_dets
@@ -56,7 +56,7 @@ def test_backflow_batched(mol, n_core, num_epochs=2400, test=False, random_key=1
         print(f"Warning: n_core specified is less than batch_size."
               f"Falling back to batch_size ={batch_size}")
     if n_core % batch_size != 0:
-        n_core = n_core - n_core % t.batch_size
+        n_core = n_core - n_core % t.n_batch
         print(f"Warning: n_core specified is not a multiple of batch_size."
               f"Falling back to n_core ={n_core}")
 

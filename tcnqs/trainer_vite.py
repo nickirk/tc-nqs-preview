@@ -186,7 +186,7 @@ def vite_solver(jacobian: jnp.ndarray, E_loc: jnp.ndarray, proj_matrix: jnp.ndar
     """
     if method == 'SR':
         return Stochastic_Reconfiguration(jacobian, E_loc)
-    elif method == 'MinSR':
+    elif method == 'minSR':
         return MinSR(jacobian, E_loc)
     elif method == 'projectedSR':
         return projected_SR(jacobian, E_loc, proj_matrix)
