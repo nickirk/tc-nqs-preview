@@ -2,7 +2,7 @@ import os
 os.environ["JAX_PLATFORM_NAME"] = "cuda"
 os.environ['XLA_PYTHON_CLIENT_MEM_FRACTION'] = '0.9'
 os.environ['CUDA_VISIBLE_DEVICES'] = '0'
-
+import pickle
 #os.environ['XLA_FLAGS'] = '--xla_gpu_enable_tracing'
 #os.environ['JAX_PLATFORMS'] = 'cpu'
 import jax
@@ -28,10 +28,11 @@ def test_backflow_vite(mol,n_core,num_epochs=2400, test=False ,random_key=17 ):
         jax.config.update("jax_debug_nans", True)
     rng = random.PRNGKey(random_key)
     myhf = mol.RHF().run()
-    # cisolver = pyscf.fci.FCI(myhf)
-    # fci_e_pyscf, ci_vector=cisolver.kernel()
-    # cisolver = pyscf.fci.FCI(myhf)
-    # print("E FCI = ", fci_e_pyscf)
+    # fci_e_pyscf = 0
+    cisolver = pyscf.fci.FCI(myhf)
+    fci_e_pyscf, ci_vector=cisolver.kernel()
+    cisolver = pyscf.fci.FCI(myhf)
+    print("E FCI = ", fci_e_pyscf)
  
     hamiltonian = build_ham_from_pyscf(mol, myhf, is_tc=t.is_tc)
     
@@ -75,7 +76,7 @@ def test_backflow_vite(mol,n_core,num_epochs=2400, test=False ,random_key=17 ):
     sampler = FSSC(n_core, int(n_connected) ,hamiltonian.n_elec_a, hamiltonian.n_elec_b, num_orbitals, n_batch=batch_size)
     sampler = sampler.initialize()
     # svd_save = []
-    jax.profiler.start_trace("tmp/tensorboard")
+    # jax.profiler.start_trace("tmp/tensorboard")
     for epoch in range(num_epochs):
         a = time.time()
         state_bf, loss_bf, sampler  = trainer.trainer_vite(state_bf, hamiltonian, sampler , solver='SR')
@@ -84,9 +85,11 @@ def test_backflow_vite(mol,n_core,num_epochs=2400, test=False ,random_key=17 ):
         b = time.time()
         print(f"Epoch: {epoch+1}, Loss_bf: {loss_bf}, Time taken: {b-a} ") #, Time taken: {b-a}
     # train_losses_bf.block_until_ready()
-    jax.device_get(train_losses_bf)
-    jax.profiler.stop_trace()
-    return train_losses_bf, fci_e_pyscf
+    # jax.device_get(train_losses_bf)
+    # jax.profiler.stop_trace()
+    # with open(f"tcnqs/simulations/pickle_save/minSR1_{mol.atom_symbol(0)}_lr={t.learning_rate}_ncore={t.n_core}_epochs={t.num_epochs}.pkl", 'wb') as fp:
+    #     pickle.dump(state_bf.params, fp)
+    # return train_losses_bf, fci_e_pyscf
 
 if __name__ == '__main__':
     

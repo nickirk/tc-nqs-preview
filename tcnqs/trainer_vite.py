@@ -6,11 +6,11 @@ import optax
 from flax.training.train_state import TrainState
 
 from functools import partial
-from tcnqs.sampler.connected_dets import generate_connected_space
+# from tcnqs.sampler.connected_dets import generate_connected_space
 from tcnqs.sampler.fssc import FSSC
 from tcnqs.hamiltonian import Hamiltonian
 from tcnqs.test.test_parameters import learning_rate
-from tcnqs.trainer import energy 
+# from tcnqs.trainer import energy 
 
 
 @jax.jit
@@ -30,18 +30,57 @@ def energy_fn(state, hamiltonian: Hamiltonian, sampler: FSSC):
         jnp.ndarray: Local energy contributions.
         float: Norm of the core coefficients.
     """
-    sample , H_ij = sampler.next_sample_stored(hamiltonian)
-    unique_full , idx = sample
-    Ci = state.apply_fn({'params': state.params},unique_full)
-    ci_core, ci_connected = Ci[idx][:sampler.n_core], Ci[idx][sampler.n_core:].reshape(sampler.n_core,-1)
-    norm = jnp.linalg.norm(ci_core)
-    ci_core, ci_connected = ci_core/norm, ci_connected/norm
-    next_sample_idx = jnp.argsort(jnp.abs(Ci),descending =True)[:sampler.n_core]
-    E_loc = jnp.einsum('ij,ij->i', H_ij,ci_connected)
-    energy = jnp.dot(ci_core,E_loc)
-    new_sample_core = unique_full[next_sample_idx]
+
+    if sampler.n_core==sampler.n_batch:
+        sample , H_ij = sampler.next_sample_stored(hamiltonian)
+        unique_full , idx = sample
+        Ci = state.apply_fn({'params': state.params},unique_full)
+        ci_core, ci_connected = Ci[idx][:sampler.n_core], Ci[idx][sampler.n_core:].reshape(sampler.n_core,-1)
+        norm = jnp.linalg.norm(ci_core)
+        ci_core, ci_connected = ci_core/norm, ci_connected/norm
+        next_sample_idx = jnp.argsort(jnp.abs(Ci),descending =True)[:sampler.n_core]
+        E_loc = jnp.einsum('ij,ij->i', H_ij,ci_connected)
+        energy = jnp.dot(ci_core,E_loc)
+        new_sample_core = unique_full[next_sample_idx]
+
+    else:
+        batched_energy = lambda carry, batch_core: batched_energy_fn(carry, batch_core, state, hamiltonian, sampler)
+
+        (energy, (new_sample_core, next_sample_ci)), (ci_core, E_loc) = jax.lax.scan(batched_energy, (0.0, (jnp.zeros_like(sampler.core_space), jnp.zeros(sampler.n_core,dtype=jnp.float64)))
+                                                                                ,sampler.core_space.reshape(-1,sampler.n_batch,sampler.n_spac_orb) )
+        norm = jnp.linalg.norm(ci_core.reshape(sampler.n_core,))
+        ci_core = ci_core.reshape(sampler.n_core,) / norm
+        E_loc = E_loc.reshape(sampler.n_core,) / norm 
+        energy = energy/norm**2
 
     return energy, new_sample_core, ci_core, E_loc, norm
+
+def batched_energy_fn(carry, batch_core, state, hamiltonian, sampler):
+    sample , H_ij = sampler.next_sample_stored_batch(hamiltonian, batch_core)
+    unique_full , idx = sample
+    Ci = state.apply_fn({'params': state.params},unique_full)
+    ci_core, ci_connected = Ci[idx][:sampler.n_batch], Ci[idx][sampler.n_batch:].reshape(sampler.n_batch,-1)
+    # norm = jnp.linalg.norm(ci_core)
+    # ci_core, ci_connected = ci_core/norm, ci_connected/norm
+    max_indices = jnp.argsort(jnp.abs(Ci),descending =True)[:sampler.n_core]
+    E_loc = jnp.einsum('ij,ij->i', H_ij,ci_connected)
+    energy = jnp.dot(ci_core,E_loc)
+    # new_sample_core = unique_full[next_sample_idx]
+
+    # Function unique among last sample Ci and new sample Ci 
+    # size to be sampler.n_core
+    combined_sample_space =  jnp.concatenate((jnp.zeros((1,sampler.n_spac_orb),dtype=jnp.int8),carry[1][0], unique_full[max_indices]),axis=0) 
+
+    combined_sample_space, unique_idx = jnp.unique(combined_sample_space, axis=0, size = 2*sampler.n_core+1,
+                                                fill_value=jnp.zeros(sampler.n_spac_orb,dtype=jnp.int8), return_index=True)
+    ci_combined = jnp.concatenate((jnp.zeros(1),carry[1][1], Ci[max_indices]),axis=0)[unique_idx]
+
+    next_sample_idx = jnp.argsort(jnp.abs(ci_combined), descending=True)[:sampler.n_core]
+    # = (combined_sample_space[next_sample_idx], ci_combined[next_sample_idx])
+
+    carry_new_sample = (combined_sample_space[next_sample_idx],ci_combined[next_sample_idx])
+
+    return (carry[0] + energy, carry_new_sample), (ci_core, E_loc)
 
 @partial(jax.vmap, in_axes=(None, 0))
 def generate_jacobian(state, slater_det):

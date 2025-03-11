@@ -67,22 +67,24 @@ class FSSC(Sampler):
 
     
     # @jax.jit 
-    # def next_sample_stored_batch(self,batch_core, hamiltonian :Hamiltonian) -> jnp.ndarray: 
-    #     return self._full_space_(batch_core),self.ham_stored(batch_core, hamiltonian)
+    def next_sample_stored_batch(self, hamiltonian :Hamiltonian, batch_core) -> jnp.ndarray: 
+
+        ham_stored, connected_space = jax.vmap(hamiltonian.generate_hamiltonian_and_connections, in_axes =(0))(batch_core)
+        return self._full_space_(connected_space,batch_core),ham_stored
     
 
     # @jax.jit 
-    def next_sample_stored(self, hamiltonian :Hamiltonian) -> jnp.ndarray:   #input: state instead of params,last_sample
-        # ham_stored, connected_space = jax.vmap(hamiltonian.generate_hamiltonian_and_connections, in_axes =(0))(self.core_space)
-        def batched_ham_connections(carry, dets):
-            function = jax.vmap(hamiltonian.generate_hamiltonian_and_connections, in_axes =(0))
-            return carry, function(dets)
-        init_dets = self.core_space.reshape(-1,self.n_batch,self.n_spac_orb)
-        _ ,(ham_stored, connected_space) = jax.lax.scan(batched_ham_connections, None , init_dets)
-        connected_space = connected_space.reshape(self.n_core,-1,self.n_spac_orb)
-        ham_stored = ham_stored.reshape(self.n_core,-1)
+    def next_sample_stored(self, hamiltonian :Hamiltonian) -> jnp.ndarray:   #input: state instead of params,last_samples
+        ham_stored, connected_space = jax.vmap(hamiltonian.generate_hamiltonian_and_connections, in_axes =(0))(self.core_space)
+        # def batched_ham_connections(carry, dets):
+        #     function = jax.vmap(hamiltonian.generate_hamiltonian_and_connections, in_axes =(0))
+        #     return carry, function(dets)
+        # init_dets = self.core_space.reshape(-1,self.n_batch,self.n_spac_orb)
+        # _ ,(ham_stored, connected_space) = jax.lax.scan(batched_ham_connections, None , init_dets)
+        # connected_space = connected_space.reshape(self.n_core,-1,self.n_spac_orb)
+        # ham_stored = ham_stored.reshape(self.n_core,-1)
 
-        return self._full_space_(connected_space),ham_stored #,self.ham_stored(self.core_space, hamiltonian)
+        return self._full_space_(connected_space, self.core_space),ham_stored #,self.ham_stored(self.core_space, hamiltonian)
     
 
     # ~TODO~: DEBUG :DONE 
@@ -92,7 +94,7 @@ class FSSC(Sampler):
         # [1:] clip the array based on lexicographic sort order
         # [1:] [:-1] +1 -1 ,jnp.zeros((1,self.n_spac_orb),dtype =jnp.uint8)
     @jax.jit
-    def _full_space_(self, connected_space: jnp.ndarray) -> jnp.ndarray:
+    def _full_space_(self, connected_space: jnp.ndarray, batch_core: jnp.ndarray) -> jnp.ndarray:
 
         # connected_space = self._vmap_generate_connected_space(sample_core)
         # parts of old code
@@ -103,7 +105,7 @@ class FSSC(Sampler):
         # return unique_full,idx
 
         # add padding to the end of the array to make sure jax.unique behaves correctly
-        full_space = jnp.concatenate((self.core_space,connected_space.reshape(-1,self.n_spac_orb)
+        full_space = jnp.concatenate((batch_core,connected_space.reshape(-1,self.n_spac_orb)
                                        ,jnp.zeros((1,self.n_spac_orb),dtype =jnp.int8)),axis=0)
         bin_full_space = self._binary_to_int64(full_space)
         unique_full, idx ,inverse_idx = jnp.unique(bin_full_space,return_index=True, size = self.n_full+1, return_inverse=True
@@ -111,7 +113,7 @@ class FSSC(Sampler):
         return full_space[idx][1:], inverse_idx[:-1]-1
 
     # @jax.jit
-    def ham_stored(self, sample_core, hamiltonain):
+    def _ham_stored(self, sample_core, hamiltonain):
         # sample_core = sample[0][sample[1][:sampler.n_core]].reshape(-1,sampler.n_spac_orb)
         connected_space = self._vmap_generate_connected_space(sample_core)
 
