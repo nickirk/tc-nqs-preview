@@ -1,4 +1,3 @@
-from ast import Raise
 import jax
 import jax.numpy as jnp
 import optax
@@ -9,7 +8,7 @@ from functools import partial
 # from tcnqs.sampler.connected_dets import generate_connected_space
 from tcnqs.sampler.fssc import FSSC
 from tcnqs.hamiltonian import Hamiltonian
-from tcnqs.test.test_parameters import learning_rate
+import tcnqs.test.test_parameters as t
 # from tcnqs.trainer import energy 
 
 
@@ -235,6 +234,7 @@ def vite_solver(jacobian: jnp.ndarray, E_loc: jnp.ndarray, proj_matrix: jnp.ndar
 
 # Without ADAM
 def create_train_state_VITE(rng, model, variables):
-    tx = optax.sgd(learning_rate=learning_rate)
+    scheduler = optax.linear_schedule(init_value=t.learning_rate[0], end_value=t.learning_rate[1], transition_steps=t.learning_rate[2])
+    tx = optax.sgd(learning_rate=scheduler)
     return TrainState.create(apply_fn=model.apply, params=variables['params'], tx=tx)
 

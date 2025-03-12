@@ -4,11 +4,11 @@ from jax.tree_util import register_pytree_node_class
 
 from . import Sampler
 from tcnqs.hamiltonian import Hamiltonian
-from tcnqs.slater_det import SD
+# from tcnqs.slater_det import SD
 from functools import partial
-from scipy.special import comb
+# from scipy.special import comb
 from tcnqs.sampler.connected_dets import generate_connected_space
-import time
+
 
 @register_pytree_node_class
 class FSSC(Sampler):
@@ -69,13 +69,13 @@ class FSSC(Sampler):
     # @jax.jit 
     def next_sample_stored_batch(self, hamiltonian :Hamiltonian, batch_core) -> jnp.ndarray: 
 
-        ham_stored, connected_space = jax.vmap(hamiltonian.generate_hamiltonian_and_connections, in_axes =(0))(batch_core)
+        ham_stored, connected_space = jax.vmap(hamiltonian.hamiltonian_and_connections, in_axes =(0,None))(batch_core)
         return self._full_space_(connected_space,batch_core),ham_stored
     
 
     # @jax.jit 
     def next_sample_stored(self, hamiltonian :Hamiltonian) -> jnp.ndarray:   #input: state instead of params,last_samples
-        ham_stored, connected_space = jax.vmap(hamiltonian.generate_hamiltonian_and_connections, in_axes =(0))(self.core_space)
+        ham_stored, connected_space = jax.vmap(hamiltonian.hamiltonian_and_connections, in_axes =(0))(self.core_space)
         # def batched_ham_connections(carry, dets):
         #     function = jax.vmap(hamiltonian.generate_hamiltonian_and_connections, in_axes =(0))
         #     return carry, function(dets)

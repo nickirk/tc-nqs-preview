@@ -102,7 +102,7 @@ def generate_fci_dump(myhf, filename:str, is_tc:bool):
         n_orb_xtc = h1e_xtc.shape[0]
         n_elec_xtc = mol.nelectron
         
-        fcidump_pytc.write_fcidump(filename, h1e_xtc, h2e_xtc, ecore_xtc, n_orb_xtc, n_elec_xtc)
+        fcidump_pytc.write(filename, h1e_xtc, h2e_xtc, ecore_xtc, n_orb_xtc, n_elec_xtc)
 
 def build_ham_from_pyscf(mol, myhf, is_tc= False): 
     # Read the FCIDUMP file

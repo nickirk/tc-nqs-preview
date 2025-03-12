@@ -2,6 +2,8 @@ import os
 os.environ["JAX_PLATFORM_NAME"] = "cuda"
 os.environ['XLA_PYTHON_CLIENT_MEM_FRACTION'] = '0.9'
 os.environ['CUDA_VISIBLE_DEVICES'] = '0'
+
+import logging
 import pickle
 #os.environ['XLA_FLAGS'] = '--xla_gpu_enable_tracing'
 #os.environ['JAX_PLATFORMS'] = 'cpu'
@@ -23,6 +25,7 @@ import tcnqs.test.test_parameters as t
 
 
 def test_backflow_vite(mol,n_core,num_epochs=2400, test=False ,random_key=17 ):
+   
     if test:
         jax.config.update("jax_enable_x64", True)
         jax.config.update("jax_debug_nans", True)
@@ -83,23 +86,33 @@ def test_backflow_vite(mol,n_core,num_epochs=2400, test=False ,random_key=17 ):
         # loss_bf.block_until_ready()
         train_losses_bf.append(loss_bf)
         b = time.time()
-        print(f"Epoch: {epoch+1}, Loss_bf: {loss_bf}, Time taken: {b-a} ") #, Time taken: {b-a}
+        # print(f"Epoch: {epoch+1}, Loss_bf: {loss_bf}, Time taken: {b-a} ") #, Time taken: {b-a}
+        logging.info(f"Epoch: {epoch+1}, Loss_bf: {loss_bf}, Time taken: {b-a} ")
     # train_losses_bf.block_until_ready()
     # jax.device_get(train_losses_bf)
     # jax.profiler.stop_trace()
-    # with open(f"tcnqs/simulations/pickle_save/minSR1_{mol.atom_symbol(0)}_lr={t.learning_rate}_ncore={t.n_core}_epochs={t.num_epochs}.pkl", 'wb') as fp:
-    #     pickle.dump(state_bf.params, fp)
-    # return train_losses_bf, fci_e_pyscf
+    with open(f"tcnqs/simulations/pickle_save/minSR1_{mol.atom_symbol(0)}_lr={t.learning_rate}_ncore={t.n_core}_epochs={t.num_epochs}.pkl", 'wb') as fp:
+        pickle.dump(state_bf.params, fp)
+    return train_losses_bf, fci_e_pyscf
 
 if __name__ == '__main__':
-    
+    logging.basicConfig(
+    filename=f"/scratch/u/Unik.Wadhwani/MasterArbeit/tc-nqs/tcnqs/minSR_{t.mol.atom_symbol(0)}_lr={t.learning_rate}_ncore={t.n_core}.log", 
+    filemode='a', # Log file name
+    level=logging.INFO,  # Set the logging level (INFO to capture losses)
+    format='%(asctime)s - %(message)s',  # Format: timestamp followed by the loss
+    )
+
     mol = t.mol
     print(jax.devices())
     start = time.time()
+
     losses , fci_e_pyscf = test_backflow_vite(mol , random_key=15,n_core=t.n_core,num_epochs=t.num_epochs, test= True)
     if t.save:
         print("Saving to file")
         jnp.save(f"tcnqs/simulations/minSR1_{mol.atom_symbol(0)}_lr={t.learning_rate}_ncore={t.n_core}.npy",jnp.array(losses))
         jnp.save(f"tcnqs/simulations/fci_{mol.atom_symbol(0)}.npy",jnp.array(fci_e_pyscf))
     end = time.time()
+
+    print("Finished execution!")
     print("Time taken: ", end-start)

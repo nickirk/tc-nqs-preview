@@ -1,5 +1,5 @@
 import os
-os.environ['CUDA_VISIBLE_DEVICES'] = '1'
+os.environ['CUDA_VISIBLE_DEVICES'] = '0'
 import jax
 import jax.numpy as jnp
 # import numpy as np
@@ -63,9 +63,9 @@ def test_setup_hci(mol):
 if __name__ == '__main__':
     
     mol =pyscf.M(
-    atom = 'H 0 0 0; H 0 0 1.0;H 0 0 5;',  
+    atom = 'H 0 0 0; O 0 0 1.0;H 0 0 2;',  
     basis = 'sto-3g',
-    spin = 1,
+    spin = 0,
     charge = 0,
     symmetry = False
     )

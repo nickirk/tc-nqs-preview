@@ -1,3 +1,4 @@
+from tkinter import NO
 import jax.numpy as jnp
 import jax
 from jax.tree_util import register_pytree_node_class
@@ -200,13 +201,13 @@ class Hamiltonian:
 
     # @jax.jit
 
-    
-    def hamiltonian_and_connections(self, det):
-        return self.generate_hamiltonian_and_connections(det) 
-    #   return jax.lax.cond(jnp.sum(det)==self.n_elec_a+self.n_elec_b,self.generate_hamiltonian_and_connections ,self.padded_elements, det)
+    @partial(jax.jit, static_argnums=(2))
+    def hamiltonian_and_connections(self, det,  apply_fn=None):
+        # return self.generate_hamiltonian_and_connections(det) 
+        return jax.lax.cond(jnp.sum(det)==self.n_elec_a+self.n_elec_b,self.generate_hamiltonian_and_connections ,self.padded_elements, det, apply_fn)
 
-    @jax.jit
-    def generate_hamiltonian_and_connections(self, det: jnp.array):
+    # @jax.jit
+    def generate_hamiltonian_and_connections(self, det: jnp.array, apply_fn=None):
         n_spa_orb = self.n_orb // 2
         n_holes_a = n_spa_orb - self.n_elec_a
         n_holes_b = n_spa_orb - self.n_elec_b
@@ -222,28 +223,35 @@ class Hamiltonian:
         
         if self.n_elec_b > 0 and n_holes_b > 0:
             single_particle_hole_pair_b = self.single_excitations(particles_pos[self.n_elec_a:], holes_pos[n_holes_a:])
-            ham_and_det = jax.tree.map(lambda x,y: jnp.concatenate((x,y), axis=0),ham_and_det, self.excitation_1(det, particles_pos, single_particle_hole_pair_b))
+            ham_and_det = jax.tree.map(lambda x,y: jnp.concatenate((x,y), axis=0),ham_and_det, self.excitation_1(det, particles_pos, single_particle_hole_pair_b ))
         
         if (self.n_elec_a > 0 and n_holes_a > 0) and (self.n_elec_b > 0 and n_holes_b > 0) :
             pairs_double_exictations_combined = self.possible_excitations(single_particle_hole_pair_a, single_particle_hole_pair_b)
-            ham_and_det = jax.tree.map(lambda x,y: jnp.concatenate((x,y), axis=0),ham_and_det, self.excitation_2(det, pairs_double_exictations_combined))
+            ham_and_det = jax.tree.map(lambda x,y: jnp.concatenate((x,y), axis=0),ham_and_det, self.excitation_2(det, pairs_double_exictations_combined ))
         
         if self.n_elec_a > 1 and n_holes_a > 1:
             double_particle_hole_pair_a = self.double_excitations(particles_pos[:self.n_elec_a], holes_pos[:n_holes_a])
-            ham_and_det = jax.tree.map(lambda x,y: jnp.concatenate((x,y), axis=0),ham_and_det, self.excitation_2(det, double_particle_hole_pair_a))
+            ham_and_det = jax.tree.map(lambda x,y: jnp.concatenate((x,y), axis=0),ham_and_det, self.excitation_2(det, double_particle_hole_pair_a ))
         if self.n_elec_b > 1 and n_holes_b > 1:
             double_particle_hole_pair_b = self.double_excitations(particles_pos[self.n_elec_a:], holes_pos[n_holes_a:])
-            ham_and_det =jax.tree.map(lambda x,y: jnp.concatenate((x,y), axis=0),ham_and_det, self.excitation_2(det, double_particle_hole_pair_b))
+            ham_and_det =jax.tree.map(lambda x,y: jnp.concatenate((x,y), axis=0),ham_and_det, self.excitation_2(det, double_particle_hole_pair_b ))
+        if apply_fn is None:
+            return ham_and_det
+        else:
+            return ham_and_det[0] @ apply_fn(ham_and_det[1])
 
-        return ham_and_det
-
-    def padded_elements(self,det):
-        n_spa_orb = self.n_orb // 2
-        num_connections = (1 +  comb(self.n_elec_a, 2, exact=True) * comb(n_spa_orb - self.n_elec_a, 2, exact=True) +
-                                comb(self.n_elec_b, 2, exact=True) * comb(n_spa_orb - self.n_elec_b, 2, exact=True) +
-                                self.n_elec_a * self.n_elec_b * (n_spa_orb - self.n_elec_a) * (n_spa_orb - self.n_elec_b) +
-                                n_spa_orb * (self.n_elec_a + self.n_elec_b) - self.n_elec_a ** 2 - self.n_elec_b ** 2)
-        return jnp.zeros(num_connections), jnp.zeros((num_connections, self.n_orb), dtype=jnp.int8)
+    def padded_elements(self,det, apply_fn=None):
+        if apply_fn is None:
+            # return jnp.zeros(1), jnp.zeros((1, self.n_orb), dtype=jnp.int8)
+            n_spa_orb = self.n_orb // 2
+            num_connections = (1 +  comb(self.n_elec_a, 2, exact=True) * comb(n_spa_orb - self.n_elec_a, 2, exact=True) +
+                                    comb(self.n_elec_b, 2, exact=True) * comb(n_spa_orb - self.n_elec_b, 2, exact=True) +
+                                    self.n_elec_a * self.n_elec_b * (n_spa_orb - self.n_elec_a) * (n_spa_orb - self.n_elec_b) +
+                                    n_spa_orb * (self.n_elec_a + self.n_elec_b) - self.n_elec_a ** 2 - self.n_elec_b ** 2)
+        
+            return jnp.zeros(num_connections), jnp.zeros((num_connections, self.n_orb), dtype=jnp.int8)
+        else:
+            return 0.0
 
     def possible_excitations(self, pairs_alpha, pairs_beta):
         i, j = jnp.meshgrid(jnp.arange(len(pairs_alpha)), jnp.arange(len(pairs_beta)), indexing='ij')
@@ -267,18 +275,26 @@ class Hamiltonian:
         return particle_hole_pairs
 
     def excitation_0(self, det, electron_positions):
+        # if apply_fn is None:
         return jnp.expand_dims(self.ham_unexcited_element(electron_positions), axis=0), jnp.expand_dims(det, axis=0)
+        # else:
+        #     return jnp.expand_dims(self.ham_unexcited_element(electron_positions), axis=0), apply_fn(jnp.expand_dims(det, axis=0))
 
     @partial(jax.vmap, in_axes=(None,None,None,0))    
     def excitation_1(self,det, elec_pos_det, particle_hole_pairs):
         det2 = self.create_excited_state(particle_hole_pairs[0], particle_hole_pairs[1], det)
+        # if apply_fn is None:
         return self.ham_single_excitation_element(elec_pos_det,particle_hole_pairs[0] , particle_hole_pairs[1], det, det2), det2
+        # else:
+        # return self.ham_single_excitation_element(elec_pos_det,particle_hole_pairs[0] , particle_hole_pairs[1], det, det2), apply_fn(det2)
 
     @partial(jax.vmap, in_axes=(None,None,0))    
     def excitation_2(self,det, particle_holes_pairs):
         det2 = self.create_excited_state(particle_holes_pairs[:2], particle_holes_pairs[2:], det)
+        # if apply_fn is None:
         return self.ham_double_excitation_element(particle_holes_pairs[:2], particle_holes_pairs[2:], det, det2), det2
-    
+        # else:
+        # return self.ham_double_excitation_element(particle_holes_pairs[:2], particle_holes_pairs[2:], det, det2), apply_fn(det2)
 
     def setup_hci(self) -> jnp.ndarray:
         # Generate all the pairs of indices

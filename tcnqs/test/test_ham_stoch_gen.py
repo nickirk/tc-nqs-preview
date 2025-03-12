@@ -1,5 +1,5 @@
 import jax.numpy as jnp
-from tcnqs.hamiltonian_refactor import Hamiltonian
+from tcnqs.hamiltonian import Hamiltonian
 
 if __name__ == '__main__':
     ham = Hamiltonian(2,2,10,0.0,jnp.zeros((10,10)),jnp.zeros((10,10,10,10)))
