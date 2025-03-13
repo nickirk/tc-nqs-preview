@@ -31,16 +31,19 @@ def energy_fn(state, hamiltonian: Hamiltonian, sampler: FSSC):
     """
 
     if sampler.n_core==sampler.n_batch:
-        sample , H_ij = sampler.next_sample_stored(hamiltonian)
+        sample , Hij_Hji = sampler.next_sample_stored(hamiltonian)
         unique_full , idx = sample
         Ci = state.apply_fn({'params': state.params},unique_full)
         ci_core, ci_connected = Ci[idx][:sampler.n_core], Ci[idx][sampler.n_core:].reshape(sampler.n_core,-1)
         norm = jnp.linalg.norm(ci_core)
         ci_core, ci_connected = ci_core/norm, ci_connected/norm
         next_sample_idx = jnp.argsort(jnp.abs(Ci),descending =True)[:sampler.n_core]
-        E_loc = jnp.einsum('ij,ij->i', H_ij,ci_connected)
-        energy = jnp.dot(ci_core,E_loc)
+        E_loc = jax.tree.map(lambda H: jnp.einsum('ij,ij->i', H,ci_connected), Hij_Hji )## introduce tree.map here
+        energy = jnp.dot(ci_core,E_loc[0]) ## eloc [0] for pytree here 
         new_sample_core = unique_full[next_sample_idx]
+       
+        E_loc = jnp.average(jnp.column_stack(E_loc),axis=1) # check
+
 
     else:
         batched_energy = lambda carry, batch_core: batched_energy_fn(carry, batch_core, state, hamiltonian, sampler)

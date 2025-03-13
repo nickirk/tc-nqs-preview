@@ -1,15 +1,12 @@
-from tkinter import NO
+
 import jax.numpy as jnp
 import jax
 from jax.tree_util import register_pytree_node_class
 from functools import partial
 from  itertools import combinations
-from numpy import double, single
-from scipy.special import comb
-from zmq import DeviceType
 
-from tcnqs import hamiltonian
-from tcnqs.sampler.stoch_gen import possible_excitations, single_excitations
+from scipy.special import comb
+
 
 # For documentation to Jax PyTrees:
 # https://jax.readthedocs.io/en/latest/pytrees.html#applying-optional-parameters-to-pytrees
@@ -77,7 +74,7 @@ class Hamiltonian:
     """
 
     def __init__(self, n_elec_a: int, n_elec_b: int, 
-                 n_orb: int, e_core: float, h1g: jnp.array, g2e: jnp.array) -> None:
+                 n_orb: int, e_core: float, h1g: jnp.array, g2e: jnp.array, is_tc = False) -> None:
         # n_elec is total number of alpha and beta electrons
         self.n_elec = n_elec_a + n_elec_b
         self.n_elec_a = n_elec_a
@@ -87,21 +84,21 @@ class Hamiltonian:
         self.h1g = h1g
         self.g2e = g2e
         self.e_core = e_core
-        
+        self.is_tc = is_tc
+
         self.max_g2e, self.sorted_g2e, self.sorted_inds = self.setup_hci()
 
     def tree_flatten(self):
     # Return the dynamic fields and static fields separately
         dynamic = ()  # Include any fields that should be transformed (for example, if any mutable arrays)
-        static = (self.n_elec_a, self.n_elec_b, self.n_orb, self.e_core,self.h1g, self.g2e,self.n_elec,self.sorted_g2e,self.sorted_inds)
+        static = (self.n_elec_a, self.n_elec_b, self.n_orb, self.e_core,self.h1g, self.g2e,self.is_tc,self.n_elec,self.sorted_g2e,self.sorted_inds)
         return dynamic, static
 
     @classmethod
     def tree_unflatten(cls, static, dynamic):
-       
-        instance = cls(*static[:6])
-        instance.n_elec = static[6]
-        instance.sorted_g2e , instance.sorted_inds = static[7:]
+        instance = cls(*static[:7])
+        instance.n_elec = static[7]
+        instance.sorted_g2e , instance.sorted_inds = static[8:]
         return instance
     
     def __call__(self, det1, det2):
@@ -246,8 +243,10 @@ class Hamiltonian:
                                     comb(self.n_elec_b, 2, exact=True) * comb(n_spa_orb - self.n_elec_b, 2, exact=True) +
                                     self.n_elec_a * self.n_elec_b * (n_spa_orb - self.n_elec_a) * (n_spa_orb - self.n_elec_b) +
                                     n_spa_orb * (self.n_elec_a + self.n_elec_b) - self.n_elec_a ** 2 - self.n_elec_b ** 2)
-        
-            return jnp.zeros(num_connections), jnp.zeros((num_connections, self.n_orb), dtype=jnp.int8)
+            if not self.is_tc:
+                return (jnp.zeros(num_connections)), jnp.zeros((num_connections, self.n_orb), dtype=jnp.int8)
+            else:
+                return (jnp.zeros(num_connections),jnp.zeros(num_connections)), jnp.zeros((num_connections, self.n_orb), dtype=jnp.int8)
         else:
             return 0.0
 
@@ -273,26 +272,34 @@ class Hamiltonian:
         return particle_hole_pairs
 
     def excitation_0(self, det, electron_positions):
-        # if apply_fn is None:
-        return jnp.expand_dims(self.ham_unexcited_element(electron_positions), axis=0), jnp.expand_dims(det, axis=0)
-        # else:
-        #     return jnp.expand_dims(self.ham_unexcited_element(electron_positions), axis=0), apply_fn(jnp.expand_dims(det, axis=0))
+        hij, det2 =  jnp.expand_dims(self.ham_unexcited_element(electron_positions), axis=0), jnp.expand_dims(det, axis=0)
+        if not self.is_tc:
+            return (hij), det2
+        else:
+            return (hij,hij), det2 # Left eigenvector, right eigenvector, det
 
     @partial(jax.vmap, in_axes=(None,None,None,0))    
     def excitation_1(self,det, elec_pos_det, particle_hole_pairs):
         det2 = self.create_excited_state(particle_hole_pairs[0], particle_hole_pairs[1], det)
-        # if apply_fn is None:
-        return self.ham_single_excitation_element(elec_pos_det,particle_hole_pairs[0] , particle_hole_pairs[1], det, det2), det2
-        # else:
-        # return self.ham_single_excitation_element(elec_pos_det,particle_hole_pairs[0] , particle_hole_pairs[1], det, det2), apply_fn(det2)
+        hij = self.ham_single_excitation_element(elec_pos_det,particle_hole_pairs[0] , particle_hole_pairs[1], det, det2)
+        if not self.is_tc:
+            return (hij), det2
+        else:
+            hji = self.ham_single_excitation_element(elec_pos_det,particle_hole_pairs[1] , particle_hole_pairs[0], det2, det)
+            return (hij,hji), det2
+        # return self.ham_single_excitation_element(elec_pos_det,particle_hole_pairs[0] , particle_hole_pairs[1], det, det2), det2
+      
 
-    @partial(jax.vmap, in_axes=(None,None,0))    
+    @partial(jax.vmap, in_axes=(None,None,0))
     def excitation_2(self,det, particle_holes_pairs):
+
         det2 = self.create_excited_state(particle_holes_pairs[:2], particle_holes_pairs[2:], det)
-        # if apply_fn is None:
-        return self.ham_double_excitation_element(particle_holes_pairs[:2], particle_holes_pairs[2:], det, det2), det2
-        # else:
-        # return self.ham_double_excitation_element(particle_holes_pairs[:2], particle_holes_pairs[2:], det, det2), apply_fn(det2)
+        hij = self.ham_double_excitation_element(particle_holes_pairs[:2], particle_holes_pairs[2:], det, det2)
+        if not self.is_tc:
+            return (hij), det2 
+        else:
+            hji = self.ham_double_excitation_element(particle_holes_pairs[2:], particle_holes_pairs[:2], det2, det)
+            return (hij,hji), det2  # Left eigenvector, right eigenvector, det
 
     def setup_hci(self) -> jnp.ndarray:
         # Generate all the pairs of indices
