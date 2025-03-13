@@ -121,7 +121,12 @@ class Hamiltonian:
         get_2body =0.5*jnp.sum(self.g2e[elec_pos_det1[:, None], elec_pos_det1, elec_pos_det1, elec_pos_det1[:, None]] - 
                      self.g2e[elec_pos_det1[:, None], elec_pos_det1, elec_pos_det1[:, None], elec_pos_det1])
         return  self.e_core  + get_1body + get_2body
-    
+    def ham_unexcited_element(self, elec_pos_det1):
+        get_1body = jnp.sum(self.h1g[elec_pos_det1, elec_pos_det1])
+        get_2body =0.5*jnp.sum(self.g2e[elec_pos_det1[:, None], elec_pos_det1, elec_pos_det1, elec_pos_det1[:, None]] - 
+                     self.g2e[elec_pos_det1[:, None], elec_pos_det1, elec_pos_det1[:, None], elec_pos_det1])
+        return  self.e_core  + get_1body + get_2body
+
     def _single_excitation_element(self, elec_pos_det1,pos_excite,pos_holes, det1, det2):
         i = pos_excite[0]
         j = pos_holes[0]
@@ -129,27 +134,20 @@ class Hamiltonian:
         phase = self.phase(det1,i) * self.phase(det2,j)
         get_1body = self.h1g[i,j]
         # elec_pos_det1 = elec_pos_det1
-        get_2body = jnp.sum(self.g2e[i, elec_pos_det1, elec_pos_det1, j] - self.g2e[i, elec_pos_det1, j, elec_pos_det1]) 
-        #- (self.g2e[i, i, i, j] - self.g2e[i, i, j, i]) 
+        get_2body = jnp.sum(self.g2e[i, elec_pos_det1, elec_pos_det1, j] - self.g2e[i, elec_pos_det1, j, elec_pos_det1]) #- (self.g2e[i, i, i, j] - self.g2e[i, i, j, i]) 
         return phase*(get_1body + get_2body)
-    
-    def _double_excitation_element(self, elec_pos_det1,pos_excite,pos_holes, det1, det2):        
-        i,k = pos_excite
-        j,l = pos_holes
-        phase_global =self.phase_2_pos(det1,i,k)*self.phase_2_pos(det2,j,l) 
-        return phase_global*(self.g2e[i, k, l, j] - self.g2e[i, k, j, l])
-    
-    def ham_unexcited_element(self, elec_pos_det1):
-        get_1body = jnp.sum(self.h1g[elec_pos_det1, elec_pos_det1])
-        get_2body =0.5*jnp.sum(self.g2e[elec_pos_det1[:, None], elec_pos_det1, elec_pos_det1, elec_pos_det1[:, None]] - 
-                     self.g2e[elec_pos_det1[:, None], elec_pos_det1, elec_pos_det1[:, None], elec_pos_det1])
-        return  self.e_core  + get_1body + get_2body
     
     def ham_single_excitation_element(self, elec_pos_det1, pos_excite,pos_holes, det1, det2):
         phase = self.phase(det1,pos_excite) * self.phase(det2,pos_holes)
         get_1body = self.h1g[pos_excite,pos_holes]
         get_2body = jnp.sum(self.g2e[pos_excite, elec_pos_det1, elec_pos_det1, pos_holes] - self.g2e[pos_excite, elec_pos_det1, pos_holes, elec_pos_det1]) 
         return phase*(get_1body + get_2body)
+
+    def _double_excitation_element(self, elec_pos_det1,pos_excite,pos_holes, det1, det2):        
+        i,k = pos_excite
+        j,l = pos_holes
+        phase_global =self.phase_2_pos(det1,i,k)*self.phase_2_pos(det2,j,l) 
+        return phase_global*(self.g2e[i, k, l, j] - self.g2e[i, k, j, l])
     
     def ham_double_excitation_element(self, pos_excite, pos_holes, det1, det2):        
         i,k = pos_excite

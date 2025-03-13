@@ -45,13 +45,40 @@ def test_hamiltonian(mol, test=False):
         assert jnp.absolute(fci_e_diagonal-fci_e_pyscf) < 1e-7 
         print("Success: FCI energies match!")
         
-def test_hamiltonian_refactor(mol, test=False):
+# def test_hamiltonian_refactor(mol, test=False):
+#     if test:
+#         jax.config.update("jax_enable_x64", True)
+        
+#     myhf = mol.RHF().run()
+#     ham = build_ham_from_pyscf(mol, myhf)
+def test_hamiltonian_tc(mol, test=False):
     if test:
         jax.config.update("jax_enable_x64", True)
         
     myhf = mol.RHF().run()
-    ham = build_ham_from_pyscf(mol, myhf)
+
+    ham = build_ham_from_pyscf(mol, myhf, is_tc=True)
+
+    fci_e_pyscf, ci_vector = run_fci(mol, myhf)
+    x_train, y_train = generate_ci_data(ham.n_orb//2, ham.n_elec_a, ham.n_elec_b, ci_vector)
+    x_train = jnp.asarray(x_train)
     
+    jax_ham = jax.vmap(jax.vmap(ham, in_axes=(0, None)), in_axes=(None, 0))
+    H = jax_ham(x_train, x_train)
+    # for i in range(H.shape[0]):
+    #     for j in range(H.shape[1]):
+    #         if jnp.abs(H[i,j]) < 1e-10:
+    #             H = H.at[i,j].set(0)
+    eigs = jax.jit(lambda H:jnp.linalg.eig(H)[0], backend='cpu')(H)
+    if test:            
+        fci_e_diagonal = jnp.min(eigs) 
+        
+        e_hf=H[0,0]
+        print(f"Hamiltonian:{fci_e_diagonal}, Pyscf:{fci_e_pyscf} ") 
+        assert jnp.absolute(myhf.e_tot- e_hf) < 1e-7
+        print("Success: HF energies match!")
+        assert jnp.absolute(fci_e_diagonal-fci_e_pyscf) < 1e-7 
+        print("Success: FCI energies match!")
 
 def test_setup_hci(mol):
     myhf = mol.RHF().run()
@@ -62,16 +89,18 @@ def test_setup_hci(mol):
    
 if __name__ == '__main__':
     
-    mol =pyscf.M(
-    atom = 'H 0 0 0; O 0 0 1.0;H 0 0 2;',  
-    basis = 'sto-3g',
+    mol = pyscf.M(
+    atom = 'He 0 0 0 ' , #  H 0 0 3.0;  H 0 0 4.0 , # H 0 0 3.0; H 0 0 4.0  ,
+    basis = 'ccpvdz',
+    
     spin = 0,
     charge = 0,
-    symmetry = False
+    symmetry = False,
+#    unit = 'Ang'
     )
     
     #test_hamiltonian(mol, test=True)
-    test_hamiltonian(mol, test=True)
+    test_hamiltonian_tc(mol, test=True)
 
     #mol = pyscf.M(
     #atom = 'H 0 0 0; H 0 0 1.0 ; H 0 0 3; H 0 0 4',  
