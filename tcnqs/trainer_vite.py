@@ -1,7 +1,5 @@
 import jax
 import jax.numpy as jnp
-from matplotlib.patheffects import Normal
-from matplotlib.pylab import norm
 import optax
 #from jax import vmap
 from flax.training.train_state import TrainState
@@ -279,18 +277,13 @@ def create_train_state_VITE(rng, model, variables):
     return TrainState.create(apply_fn=model.apply, params=variables['params'], tx=tx)
 
 def trainer_tc_stationary(state, hamiltonian, sampler):
-    grads, (energy, new_sample_core,norm) = stationery_grads1(state, hamiltonian, sampler)
+    grads, (r_square, energy, new_sample_core,norm) = stationery_grads1(state, hamiltonian, sampler)
     
     state = state.apply_gradients(grads=grads)
     sampler = sampler.update_core_space(new_sample_core)
     grads = jax.flatten_util.ravel_pytree(grads)[0]
 
-    return state, energy, sampler, jnp.linalg.norm(grads)
-
-# @jax.jit
-# def R_square(energy, H_ij, sample, norm, idx, sampler):
-#     unique_full , idx = sample
-#     ci_core, ci_connected = Ci[idx][:sampler.n_core], Ci[idx][sampler.n_core:].reshape(sampler.n_core,-1)
+    return state, r_square, energy, norm, sampler, jnp.linalg.norm(grads)
 
 
 
@@ -309,30 +302,17 @@ def stationery_grads1(state, hamiltonian , sampler):
     energy = jnp.dot(ci_core,E_loc)/norm**2 ## eloc [0] for pytree here left eigenvector as corespace
     #jnp.sum(ci_core)*jnp.sum(E_loc[0])
     new_sample_core = unique_full[next_sample_idx]
-    def R_square(params, eloc1,ci_core1,Hij):
+    def R_square(params, energy, Hij):
         Ci = state.apply_fn({'params': params},unique_full)
         ci_core, ci_connected = Ci[idx][:sampler.n_core], Ci[idx][sampler.n_core:].reshape(sampler.n_core,-1)
         E_loc = jnp.einsum('ij,ij->i', Hij,ci_connected)
-        norm = jnp.dot(ci_core, ci_core1)
-        e = jnp.dot(ci_core,eloc1)/norm
-        R = (E_loc- e*ci_core)/norm
-
-
-        # R = ci_core @ Hij[0] 
-        # Hij = Hij.at[:,0].add(- e)
-        # R = ci_core @ Hij/norm
-        # R = (R.at[0].set(R[0] - e*jnp.sum(ci_core)))/norm
-        
+        norm = jnp.dot(ci_core, ci_core)
+        # e = jnp.dot(ci_core, E_loc)/norm
+    
+        R = (E_loc- energy*ci_core)/norm
         return jnp.dot(R,R)
-    #E_loc = E_loc[0]
 
     
-    #R = (E_loc - energy*ci_core)
-    grads = jax.grad(R_square)(state.params, E_loc ,ci_core,Hij)
-    # grads = jax.tree_map(lambda x: x/norm**2, grads)
+    r_square, grads = jax.value_and_grad(R_square)(state.params, energy, Hij)
 
-    # jacobian = generate_jacobian(state, unique_full)
-    # jacobian_core, jacobian_connected = jacobian[idx][:sampler.n_core], jacobian[idx][sampler.n_core:].reshape(sampler.n_core,-1, jacobian.shape[1])
-    # grads = 2*(jnp.einsum('ijk,ij->kj', jacobian_connected, Hij[0]) - energy*jacobian_core.T) @ (E_loc- energy*ci_core)
-
-    return grads , (energy , new_sample_core, norm)
+    return grads , (r_square, energy , new_sample_core, norm)

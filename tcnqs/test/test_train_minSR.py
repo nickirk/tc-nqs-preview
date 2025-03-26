@@ -1,12 +1,12 @@
 import os
-os.environ["JAX_PLATFORM_NAME"] = "cuda"
+# os.environ["JAX_PLATFORM_NAME"] = "cuda"
 # os.environ['XLA_PYTHON_CLIENT_MEM_FRACTION'] = '1'
 os.environ['CUDA_VISIBLE_DEVICES'] = '0'
 
 import logging
 import pickle
 #os.environ['XLA_FLAGS'] = '--xla_gpu_enable_tracing'
-#os.environ['JAX_PLATFORMS'] = 'cpu'
+os.environ['JAX_PLATFORMS'] = 'cpu'
 import jax
 import jax.numpy as jnp
 from jax import random
@@ -86,20 +86,21 @@ def test_backflow_vite(mol,n_core,num_epochs=2400, test=False ,random_key=17 ):
     ci_data = jnp.concatenate([jnp.expand_dims(hamiltonian(sampler.core_space[0], sampler.core_space[0]),axis=0),jnp.zeros(sampler.n_core-1)], axis=0)
 
     for epoch in range(num_epochs//20):
+    # for epoch in range(1):
         state_bf, energy, pre_loss = trainer.pretrainer(state_bf, hamiltonian, sampler, ci_data)
         train_losses_bf.append(energy)
         # print(f"Pretraining Epoch: {epoch+1}, Loss: {energy}, Pre_loss: {pre_loss} ")
         logging.info(f"Pretraining Epoch: {epoch+1}, Loss: {energy}, Pre_loss: {pre_loss} ")
     for epoch in range(num_epochs):
         a = time.time()
-        state_bf, loss_bf, sampler, grad_norm  = trainer.trainer_tc_stationary(state_bf, hamiltonian, sampler)
+        state_bf, loss_bf, energy, norm, sampler, grad_norm  = trainer.trainer_tc_stationary(state_bf, hamiltonian, sampler)
         
         #trainer.trainer_vite(state_bf, hamiltonian, sampler , solver='SR')
         # loss_bf.block_until_ready()
         train_losses_bf.append(loss_bf)
         b = time.time()
         # print(f"Epoch: {epoch+1}, Loss_bf: {loss_bf}, Time taken: {b-a} ") #, Time taken: {b-a}
-        logging.info(f"Epoch: {epoch+1}, Loss_bf: {loss_bf}, grad_norm = {grad_norm} ")
+        logging.info(f"Epoch: {epoch+1}, Loss_bf: {loss_bf}, energy: {energy}, norm: {norm}, grad_norm = {grad_norm} ")
     # train_losses_bf.block_until_ready()
     # jax.device_get(train_losses_bf)
     # jax.profiler.stop_trace()
@@ -119,7 +120,7 @@ if __name__ == '__main__':
     )
 
     mol = t.mol
-    print(jax.devices())
+    # print(jax.devices())
     start = time.time()
     print(mol.atom)
 
