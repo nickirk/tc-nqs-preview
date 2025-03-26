@@ -1,6 +1,6 @@
 import os
 os.environ["JAX_PLATFORM_NAME"] = "cuda"
-os.environ['XLA_PYTHON_CLIENT_MEM_FRACTION'] = '0.9'
+# os.environ['XLA_PYTHON_CLIENT_MEM_FRACTION'] = '1'
 os.environ['CUDA_VISIBLE_DEVICES'] = '0'
 
 import logging
@@ -31,7 +31,7 @@ def test_backflow_vite(mol,n_core,num_epochs=2400, test=False ,random_key=17 ):
         jax.config.update("jax_debug_nans", True)
     rng = random.PRNGKey(random_key)
     myhf = mol.RHF().run()
-    # fci_e_pyscf = 0
+    fci_e_pyscf = 0
     cisolver = pyscf.fci.FCI(myhf)
     fci_e_pyscf, ci_vector=cisolver.kernel()
     cisolver = pyscf.fci.FCI(myhf)
@@ -72,7 +72,7 @@ def test_backflow_vite(mol,n_core,num_epochs=2400, test=False ,random_key=17 ):
                         *(n_s_orb-hamiltonian.n_elec_b) + n_s_orb*(hamiltonian.n_elec_a+hamiltonian.n_elec_b)
                         - hamiltonian.n_elec_a**2 - hamiltonian.n_elec_b**2) 
     
-    max_n_full= n_core*n_connections
+    max_n_full= batch_size*n_connections
     n_connected =  jnp.minimum(n_total_dets, max_n_full) - n_core
     n_full = n_total_dets
     #unique fn min of (n_total_dets, n_batch*n_connections) 
@@ -80,19 +80,34 @@ def test_backflow_vite(mol,n_core,num_epochs=2400, test=False ,random_key=17 ):
     sampler = sampler.initialize()
     # svd_save = []
     # jax.profiler.start_trace("tmp/tensorboard")
+    
+    # ci_data = jax.vmap(hamiltonian, in_axes=(0,0))(sampler.core_space, sampler.core_space)
+
+    ci_data = jnp.concatenate([jnp.expand_dims(hamiltonian(sampler.core_space[0], sampler.core_space[0]),axis=0),jnp.zeros(sampler.n_core-1)], axis=0)
+
+    for epoch in range(num_epochs//20):
+        state_bf, energy, pre_loss = trainer.pretrainer(state_bf, hamiltonian, sampler, ci_data)
+        train_losses_bf.append(energy)
+        # print(f"Pretraining Epoch: {epoch+1}, Loss: {energy}, Pre_loss: {pre_loss} ")
+        logging.info(f"Pretraining Epoch: {epoch+1}, Loss: {energy}, Pre_loss: {pre_loss} ")
     for epoch in range(num_epochs):
         a = time.time()
-        state_bf, loss_bf, sampler  = trainer.trainer_vite(state_bf, hamiltonian, sampler , solver='SR')
+        state_bf, loss_bf, sampler, grad_norm  = trainer.trainer_tc_stationary(state_bf, hamiltonian, sampler)
+        
+        #trainer.trainer_vite(state_bf, hamiltonian, sampler , solver='SR')
         # loss_bf.block_until_ready()
         train_losses_bf.append(loss_bf)
         b = time.time()
         # print(f"Epoch: {epoch+1}, Loss_bf: {loss_bf}, Time taken: {b-a} ") #, Time taken: {b-a}
-        logging.info(f"Epoch: {epoch+1}, Loss_bf: {loss_bf}, Time taken: {b-a} ")
+        logging.info(f"Epoch: {epoch+1}, Loss_bf: {loss_bf}, grad_norm = {grad_norm} ")
     # train_losses_bf.block_until_ready()
     # jax.device_get(train_losses_bf)
     # jax.profiler.stop_trace()
-    with open(f"tcnqs/simulations/pickle_save/minSR1_{mol.atom_symbol(0)}_lr={t.learning_rate}_ncore={t.n_core}_epochs={t.num_epochs}.pkl", 'wb') as fp:
-        pickle.dump(state_bf.params, fp)
+    if t.save:
+        save_path = f"tcnqs/simulations/SR/{mol.atom_symbol(0)}/{mol.atom}/ncore={t.n_core}/lr={t.learning_rate}/"
+        os.makedirs(save_path, exist_ok=True) 
+        with open(f"{save_path}/state_params.pkl", 'wb') as fp:
+            pickle.dump(state_bf.params, fp)
     return train_losses_bf, fci_e_pyscf
 
 if __name__ == '__main__':
@@ -106,12 +121,18 @@ if __name__ == '__main__':
     mol = t.mol
     print(jax.devices())
     start = time.time()
+    print(mol.atom)
 
     losses , fci_e_pyscf = test_backflow_vite(mol , random_key=15,n_core=t.n_core,num_epochs=t.num_epochs, test= True)
     if t.save:
         print("Saving to file")
-        jnp.save(f"tcnqs/simulations/minSR1_{mol.atom_symbol(0)}_lr={t.learning_rate}_ncore={t.n_core}.npy",jnp.array(losses))
-        jnp.save(f"tcnqs/simulations/fci_{mol.atom_symbol(0)}.npy",jnp.array(fci_e_pyscf))
+        save_path = f"tcnqs/simulations/SR/{mol.atom_symbol(0)}/{mol.atom}/ncore={t.n_core}/lr={t.learning_rate}/"
+        os.makedirs(save_path, exist_ok=True)  # Create directories if they don't exist
+
+        file_path = f"{save_path}/losses.npy"
+        jnp.save(file_path, jnp.array(losses))
+        #jnp.save(f"tcnqs/simulations/SR/{mol.atom}/ncore={t.n_core}/lr={t.learning_rate}.npy",jnp.array(losses))
+        # jnp.save(f"tcnqs/simulations/fci_{mol.atom_symbol(0)}.npy",jnp.array(fci_e_pyscf))
     end = time.time()
 
     print("Finished execution!")

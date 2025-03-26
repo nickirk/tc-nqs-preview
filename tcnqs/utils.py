@@ -1,3 +1,8 @@
+import os
+os.environ["JAX_PLATFORM_NAME"] = "cuda"
+# os.environ['XLA_PYTHON_CLIENT_MEM_FRACTION'] = '1'
+os.environ['CUDA_VISIBLE_DEVICES'] = '0'
+
 import jax.numpy as jnp
 import numpy as np
 from pyscf.fci import cistring

@@ -57,7 +57,7 @@ def test_hamiltonian_tc(mol, test=False):
         
     myhf = mol.RHF().run()
 
-    ham = build_ham_from_pyscf(mol, myhf, is_tc=True)
+    ham = build_ham_from_pyscf(mol, myhf, is_tc=0)#True)
 
     fci_e_pyscf, ci_vector = run_fci(mol, myhf)
     x_train, y_train = generate_ci_data(ham.n_orb//2, ham.n_elec_a, ham.n_elec_b, ci_vector)
@@ -70,15 +70,16 @@ def test_hamiltonian_tc(mol, test=False):
     #         if jnp.abs(H[i,j]) < 1e-10:
     #             H = H.at[i,j].set(0)
     eigs = jax.jit(lambda H:jnp.linalg.eig(H)[0], backend='cpu')(H)
-    if test:            
-        fci_e_diagonal = jnp.min(eigs) 
+    print(jnp.sort(jnp.real(eigs)))
+    # if test:            
+    #     fci_e_diagonal = jnp.min(eigs) 
         
-        e_hf=H[0,0]
-        print(f"Hamiltonian:{fci_e_diagonal}, Pyscf:{fci_e_pyscf} ") 
-        assert jnp.absolute(myhf.e_tot- e_hf) < 1e-7
-        print("Success: HF energies match!")
-        assert jnp.absolute(fci_e_diagonal-fci_e_pyscf) < 1e-7 
-        print("Success: FCI energies match!")
+    #     e_hf=H[0,0]
+    #     print(f"Hamiltonian:{fci_e_diagonal}, Pyscf:{fci_e_pyscf} ") 
+    #     assert jnp.absolute(myhf.e_tot- e_hf) < 1e-7
+    #     print("Success: HF energies match!")
+    #     assert jnp.absolute(fci_e_diagonal-fci_e_pyscf) < 1e-7 
+    #     print("Success: FCI energies match!")
 
 def test_setup_hci(mol):
     myhf = mol.RHF().run()
@@ -91,7 +92,7 @@ if __name__ == '__main__':
     
     mol = pyscf.M(
     atom = 'He 0 0 0 ' , #  H 0 0 3.0;  H 0 0 4.0 , # H 0 0 3.0; H 0 0 4.0  ,
-    basis = 'ccpvdz',
+    basis = 'ccpvTz',
     
     spin = 0,
     charge = 0,

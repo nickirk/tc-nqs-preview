@@ -244,7 +244,7 @@ class Hamiltonian:
                                     self.n_elec_a * self.n_elec_b * (n_spa_orb - self.n_elec_a) * (n_spa_orb - self.n_elec_b) +
                                     n_spa_orb * (self.n_elec_a + self.n_elec_b) - self.n_elec_a ** 2 - self.n_elec_b ** 2)
             if not self.is_tc:
-                return (jnp.zeros(num_connections)), jnp.zeros((num_connections, self.n_orb), dtype=jnp.int8)
+                return (jnp.zeros(num_connections),), jnp.zeros((num_connections, self.n_orb), dtype=jnp.int8)
             else:
                 return (jnp.zeros(num_connections),jnp.zeros(num_connections)), jnp.zeros((num_connections, self.n_orb), dtype=jnp.int8)
         else:
@@ -274,7 +274,7 @@ class Hamiltonian:
     def excitation_0(self, det, electron_positions):
         hij, det2 =  jnp.expand_dims(self.ham_unexcited_element(electron_positions), axis=0), jnp.expand_dims(det, axis=0)
         if not self.is_tc:
-            return (hij), det2
+            return (hij,), det2
         else:
             return (hij,hij), det2 # Left eigenvector, right eigenvector, det
 
@@ -283,7 +283,7 @@ class Hamiltonian:
         det2 = self.create_excited_state(particle_hole_pairs[0], particle_hole_pairs[1], det)
         hij = self.ham_single_excitation_element(elec_pos_det,particle_hole_pairs[0] , particle_hole_pairs[1], det, det2)
         if not self.is_tc:
-            return (hij), det2
+            return (hij,), det2
         else:
             hji = self.ham_single_excitation_element(elec_pos_det,particle_hole_pairs[1] , particle_hole_pairs[0], det2, det)
             return (hij,hji), det2
@@ -296,7 +296,7 @@ class Hamiltonian:
         det2 = self.create_excited_state(particle_holes_pairs[:2], particle_holes_pairs[2:], det)
         hij = self.ham_double_excitation_element(particle_holes_pairs[:2], particle_holes_pairs[2:], det, det2)
         if not self.is_tc:
-            return (hij), det2 
+            return (hij,), det2 
         else:
             hji = self.ham_double_excitation_element(particle_holes_pairs[2:], particle_holes_pairs[:2], det2, det)
             return (hij,hji), det2  # Left eigenvector, right eigenvector, det
