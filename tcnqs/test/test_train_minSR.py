@@ -13,6 +13,7 @@ from jax import random
 import pyscf
 import jax
 from scipy.special import comb
+import optax
 import time
 
 from tcnqs.utils import build_ham_from_pyscf
@@ -32,10 +33,10 @@ def test_backflow_vite(mol,n_core,num_epochs=2400, test=False ,random_key=17 ):
     rng = random.PRNGKey(random_key)
     myhf = mol.RHF().run()
     fci_e_pyscf = 0
-    cisolver = pyscf.fci.FCI(myhf)
-    fci_e_pyscf, ci_vector=cisolver.kernel()
-    cisolver = pyscf.fci.FCI(myhf)
-    print("E FCI = ", fci_e_pyscf)
+    # cisolver = pyscf.fci.FCI(myhf)
+    # fci_e_pyscf, ci_vector=cisolver.kernel()
+    # cisolver = pyscf.fci.FCI(myhf)
+    # print("E FCI = ", fci_e_pyscf)
  
     hamiltonian = build_ham_from_pyscf(mol, myhf, is_tc=t.is_tc)
     
@@ -85,12 +86,15 @@ def test_backflow_vite(mol,n_core,num_epochs=2400, test=False ,random_key=17 ):
 
     ci_data = jnp.concatenate([jnp.expand_dims(hamiltonian(sampler.core_space[0], sampler.core_space[0]),axis=0),jnp.zeros(sampler.n_core-1)], axis=0)
 
-    for epoch in range(num_epochs//20):
+    for epoch in range(min(num_epochs//20,500)):
     # for epoch in range(1):
         state_bf, energy, pre_loss = trainer.pretrainer(state_bf, hamiltonian, sampler, ci_data)
         train_losses_bf.append(energy)
         # print(f"Pretraining Epoch: {epoch+1}, Loss: {energy}, Pre_loss: {pre_loss} ")
         logging.info(f"Pretraining Epoch: {epoch+1}, Loss: {energy}, Pre_loss: {pre_loss} ")
+    tx = optax.sgd(learning_rate=t.learning_rate[1])
+    state_bf = state_bf.replace(tx = tx)
+    
     for epoch in range(num_epochs):
         a = time.time()
         state_bf, loss_bf, energy, norm, sampler, grad_norm  = trainer.trainer_tc_stationary(state_bf, hamiltonian, sampler)

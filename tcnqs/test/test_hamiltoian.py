@@ -57,7 +57,7 @@ def test_hamiltonian_tc(mol, test=False):
         
     myhf = mol.RHF().run()
 
-    ham = build_ham_from_pyscf(mol, myhf, is_tc=0)#True)
+    ham = build_ham_from_pyscf(mol, myhf, is_tc=1)#True)
 
     fci_e_pyscf, ci_vector = run_fci(mol, myhf)
     x_train, y_train = generate_ci_data(ham.n_orb//2, ham.n_elec_a, ham.n_elec_b, ci_vector)

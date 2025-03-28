@@ -1,7 +1,7 @@
 import pyscf 
 
-learning_rate = (0.01,0.005,800) #(0.3,0.01,500)
-num_epochs = 12000
+learning_rate = (0.1,0.0001,1500) #(0.3,0.01,500)
+num_epochs = 50000
 n_core = 196#4096*4
 n_batch = n_core
 hidden_layer_sizes =[4,4]
@@ -18,7 +18,7 @@ mol = pyscf.M(
 n_bf_dets = 1
 n_eig_projections = 50
 save = 0 #True  
-is_tc = 0 #True
+is_tc = 1 #True
 
 # learning_rate = (0.3,0.01,500)
 # num_epochs = 20

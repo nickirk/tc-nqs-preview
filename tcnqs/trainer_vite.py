@@ -270,13 +270,12 @@ def vite_solver(jacobian: jnp.ndarray, E_loc: jnp.ndarray, tc_adjust:jnp.ndarray
 
 
 # Without ADAM
-def create_train_state_VITE(rng, model, variables):
+def create_train_state_VITE(rng, model, variables, optimizer=optax.sgd):
     scheduler = optax.linear_schedule(init_value=t.learning_rate[0], end_value=t.learning_rate[1], transition_steps=t.learning_rate[2])
-   #removed sgd
     tx = optax.adam(learning_rate=scheduler)
     return TrainState.create(apply_fn=model.apply, params=variables['params'], tx=tx)
 
-def trainer_tc_stationary(state, hamiltonian, sampler):
+def trainer_tc_stationary(state , hamiltonian, sampler):
     grads, (r_square, energy, new_sample_core,norm) = stationery_grads1(state, hamiltonian, sampler)
     
     state = state.apply_gradients(grads=grads)

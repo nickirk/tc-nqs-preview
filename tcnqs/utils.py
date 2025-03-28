@@ -1,4 +1,6 @@
 import os
+
+from scipy import optimize
 os.environ["JAX_PLATFORM_NAME"] = "cuda"
 # os.environ['XLA_PYTHON_CLIENT_MEM_FRACTION'] = '1'
 os.environ['CUDA_VISIBLE_DEVICES'] = '0'
@@ -6,6 +8,7 @@ os.environ['CUDA_VISIBLE_DEVICES'] = '0'
 import jax.numpy as jnp
 import numpy as np
 from pyscf.fci import cistring
+import pyscf
 from pyscf.tools import fcidump
 from tcnqs.hamiltonian import Hamiltonian
 from tcnqs.fcidump import read_2_spin_orbital_seprated as read2
@@ -13,6 +16,9 @@ from tcnqs.fcidump import read_2_spin_orbital_seprated as read2
 from pytc.xtc import XTC
 from pytc.jastrow import SimpleJastrow,SM7,SM17
 from pytc.utils import fcidump as fcidump_pytc
+from pytc.autodiff.optimize import optimize_jastrow
+from pytc.autodiff.optimize import REXP
+from pytc.autodiff import xtc
 
 def generate_ci_data(num_orbitals:int, num_alpha_electrons:int, num_beta_electrons:int, ci_vector):
     """
@@ -108,12 +114,75 @@ def generate_fci_dump(myhf, filename:str, is_tc:bool):
         n_elec_xtc = mol.nelectron
         
         fcidump_pytc.write(filename, h1e_xtc, h2e_xtc, ecore_xtc, n_orb_xtc, n_elec_xtc)
+def optimize_rexp(mol, mf):
+    mol.basis = 'ccpvTz'
+    print(mol.basis)
+    mf = mol.RHF().run()
+
+    init_params = jnp.array([0.5], dtype=jnp.float64)
+    my_jastrow = REXP()  # Remove params from constructor
+    
+    # Run optimization with smaller learning rate
+    myxtc = xtc.XTC(mf, my_jastrow, grid_lvl=2)
+   
+    optimized_params = optimize_jastrow(myxtc, init_params,
+                                          optimizer_name='rmsprop',
+                                          learning_rate=1e-2,
+                                          n_steps=20)
+    print(f"optimized parameters:", optimized_params)
+    return optimized_params
+    
+def generate_fci_dump_temp(myhf, filename:str, is_tc:bool, require_params: bool =True):
+    """
+    Generate an FCIDUMP file for a molecule.
+
+    Parameters
+    ----------
+    mol : pyscf.gto.Mole
+        Molecule for which to generate the FCIDUMP file.
+
+    filename : str
+        Name of the FCIDUMP file.
+
+    is_tc : bool
+        Whether to generate the FCIDUMP file for a two-component calculation.
+    """
+
+    if not is_tc:
+        fcidump.from_scf(myhf, filename)
+    else:
+        mol = myhf.mol
+        
+        if require_params:
+            optimized_params = optimize_rexp(mol,myhf)
+            # my_jastrow = REXP(optimized_params)
+        my_jastrow = REXP()
+        my_xtc = xtc.XTC(myhf, my_jastrow, grid_lvl=2)
+        
+        h1e_xtc = my_xtc.get_1b(jastrow_params=optimized_params)
+        h2e_xtc = my_xtc.get_2b(jastrow_params=optimized_params)
+        ecore_xtc = my_xtc.get_const(jastrow_params=optimized_params)
+        n_orb_xtc = h1e_xtc.shape[0]
+        n_elec_xtc = mol.nelectron
+        
+        fcidump_pytc.write(filename, h1e_xtc, h2e_xtc, ecore_xtc, n_orb_xtc, n_elec_xtc)
 
 def build_ham_from_pyscf(mol, myhf, is_tc= False): 
     # Read the FCIDUMP file
     #fcidump_file = 'tcnqs/test/dataset_fcidump/fcidump'
-    fcidump_file = './fcidump'
-    generate_fci_dump(myhf, fcidump_file, is_tc)
+    # fcidump_file = './fcidump'
+    if is_tc:
+        save_path = f"tcnqs/simulations/fcidump_tc/{mol.atom_symbol(0)}/{mol.atom}/mol.basis/"
+        os.makedirs(save_path, exist_ok=True)
+        fcidump_file = save_path + 'fcidump'
+    else:
+        save_path = f"tcnqs/simulations/fcidump/{mol.atom_symbol(0)}/{mol.atom}/mol.basis/"
+        os.makedirs(save_path, exist_ok=True)
+        fcidump_file = save_path + 'fcidump'
+
+    if not os.path.exists(fcidump_file):
+        generate_fci_dump_temp(myhf, fcidump_file, is_tc)
+    
     n_sites, n_elec, ecore, h1e_s, g2e_s = read2(fcidump_file,is_tc=is_tc)
 
     n_elec_a, n_elec_b = mol.nelec
