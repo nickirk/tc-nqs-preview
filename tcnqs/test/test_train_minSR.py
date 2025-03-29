@@ -86,22 +86,22 @@ def test_backflow_vite(mol,n_core,num_epochs=2400, test=False ,random_key=17 ):
 
     ci_data = jnp.concatenate([jnp.expand_dims(hamiltonian(sampler.core_space[0], sampler.core_space[0]),axis=0),jnp.zeros(sampler.n_core-1)], axis=0)
 
-    for epoch in range(min(num_epochs//20,500)):
+    for epoch in range(min(num_epochs//20,100)):
     # for epoch in range(1):
         state_bf, energy, pre_loss = trainer.pretrainer(state_bf, hamiltonian, sampler, ci_data)
         train_losses_bf.append(energy)
         # print(f"Pretraining Epoch: {epoch+1}, Loss: {energy}, Pre_loss: {pre_loss} ")
         logging.info(f"Pretraining Epoch: {epoch+1}, Loss: {energy}, Pre_loss: {pre_loss} ")
-    tx = optax.sgd(learning_rate=t.learning_rate[1])
+    tx = optax.adam(learning_rate=t.learning_rate[1])
     state_bf = state_bf.replace(tx = tx)
     
     for epoch in range(num_epochs):
         a = time.time()
         state_bf, loss_bf, energy, norm, sampler, grad_norm  = trainer.trainer_tc_stationary(state_bf, hamiltonian, sampler)
         
-        #trainer.trainer_vite(state_bf, hamiltonian, sampler , solver='SR')
+        # trainer.trainer_vite(state_bf, hamiltonian, sampler , solver='SR')
         # loss_bf.block_until_ready()
-        train_losses_bf.append(loss_bf)
+        train_losses_bf.append(energy)
         b = time.time()
         # print(f"Epoch: {epoch+1}, Loss_bf: {loss_bf}, Time taken: {b-a} ") #, Time taken: {b-a}
         logging.info(f"Epoch: {epoch+1}, Loss_bf: {loss_bf}, energy: {energy}, norm: {norm}, grad_norm = {grad_norm} ")
@@ -109,7 +109,7 @@ def test_backflow_vite(mol,n_core,num_epochs=2400, test=False ,random_key=17 ):
     # jax.device_get(train_losses_bf)
     # jax.profiler.stop_trace()
     if t.save:
-        save_path = f"tcnqs/simulations/SR/{mol.atom_symbol(0)}/{mol.atom}/ncore={t.n_core}/lr={t.learning_rate}/"
+        save_path = f"tcnqs/simulations/SR/{mol.atom_symbol(0)}/{mol.atom}/{mol.basis}/ncore={t.n_core}/lr={t.learning_rate}/"
         os.makedirs(save_path, exist_ok=True) 
         with open(f"{save_path}/state_params.pkl", 'wb') as fp:
             pickle.dump(state_bf.params, fp)
@@ -131,7 +131,7 @@ if __name__ == '__main__':
     losses , fci_e_pyscf = test_backflow_vite(mol , random_key=15,n_core=t.n_core,num_epochs=t.num_epochs, test= True)
     if t.save:
         print("Saving to file")
-        save_path = f"tcnqs/simulations/SR/{mol.atom_symbol(0)}/{mol.atom}/ncore={t.n_core}/lr={t.learning_rate}/"
+        save_path = f"tcnqs/simulations/SR/{mol.atom_symbol(0)}/{mol.atom}/{mol.basis}/ncore={t.n_core}/lr={t.learning_rate}/"
         os.makedirs(save_path, exist_ok=True)  # Create directories if they don't exist
 
         file_path = f"{save_path}/losses.npy"

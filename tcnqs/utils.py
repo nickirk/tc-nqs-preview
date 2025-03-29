@@ -172,16 +172,16 @@ def build_ham_from_pyscf(mol, myhf, is_tc= False):
     #fcidump_file = 'tcnqs/test/dataset_fcidump/fcidump'
     # fcidump_file = './fcidump'
     if is_tc:
-        save_path = f"tcnqs/simulations/fcidump_tc/{mol.atom_symbol(0)}/{mol.atom}/mol.basis/"
+        save_path = f"tcnqs/simulations/fcidump_tc/{mol.atom_symbol(0)}/{mol.atom}/{mol.basis}/"
         os.makedirs(save_path, exist_ok=True)
         fcidump_file = save_path + 'fcidump'
     else:
-        save_path = f"tcnqs/simulations/fcidump/{mol.atom_symbol(0)}/{mol.atom}/mol.basis/"
+        save_path = f"tcnqs/simulations/fcidump/{mol.atom_symbol(0)}/{mol.atom}/{mol.basis}/"
         os.makedirs(save_path, exist_ok=True)
         fcidump_file = save_path + 'fcidump'
 
     if not os.path.exists(fcidump_file):
-        generate_fci_dump_temp(myhf, fcidump_file, is_tc)
+        generate_fci_dump(myhf, fcidump_file, is_tc)
     
     n_sites, n_elec, ecore, h1e_s, g2e_s = read2(fcidump_file,is_tc=is_tc)
 

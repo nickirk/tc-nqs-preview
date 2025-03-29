@@ -305,7 +305,7 @@ def stationery_grads1(state, hamiltonian , sampler):
         Ci = state.apply_fn({'params': params},unique_full)
         ci_core, ci_connected = Ci[idx][:sampler.n_core], Ci[idx][sampler.n_core:].reshape(sampler.n_core,-1)
         E_loc = jnp.einsum('ij,ij->i', Hij,ci_connected)
-        norm = jnp.dot(ci_core, ci_core)
+        norm = jnp.linalg.norm(ci_core)
         # e = jnp.dot(ci_core, E_loc)/norm
     
         R = (E_loc- energy*ci_core)/norm
