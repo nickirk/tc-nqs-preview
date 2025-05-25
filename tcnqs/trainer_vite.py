@@ -61,7 +61,7 @@ def trainer_vite(state:TrainState, hamiltonian: Hamiltonian, sampler : FSSC , is
 
 
 @jax.jit
-def pretrainer(state, hamiltonian: Hamiltonian, sampler: FSSC, ci_data):
+def pretrainer_hf_state(state, hamiltonian: Hamiltonian, sampler: FSSC, ci_data):
     def loss_fn(params):
         preds = state.apply_fn({'params': params}, sampler.core_space)
         return jnp.mean((preds - ci_data) ** 2)
@@ -70,7 +70,9 @@ def pretrainer(state, hamiltonian: Hamiltonian, sampler: FSSC, ci_data):
     
     return state, energy_fn(state, hamiltonian, sampler)[0], loss
 
-@jax.jit
+
+
+
 def energy_fn(state, hamiltonian: Hamiltonian, sampler: FSSC):
     """
     Computes the local energy and prepares new sampling points.
@@ -183,8 +185,8 @@ def jacobian_normalized(state, core_space, ci_core, norm, energy):
         jnp.ndarray: Normalized Jacobian.
     """
     Jacobian = generate_jacobian(state, core_space) 
-    # Jacobian = (Jacobian - jnp.outer(ci_core,  jnp.dot(Jacobian.T, ci_core))) / norm
-    return Jacobian , 0#energy * jnp.dot(Jacobian.T, ci_core)
+    Jacobian = (Jacobian - jnp.outer(ci_core,  jnp.dot(Jacobian.T, ci_core))) / norm
+    return Jacobian , 0.0 #energy * jnp.dot(Jacobian.T, ci_core)
 
     
 def Stochastic_Reconfiguration(jacobian, E_loc, tc_adjust , is_tc):
@@ -199,11 +201,12 @@ def Stochastic_Reconfiguration(jacobian, E_loc, tc_adjust , is_tc):
         jnp.ndarray: Computed gradients using CG on the SR matrix.
     """
     Aij = jacobian.T @ jacobian
-    Aij = Aij + 1e-6 * jnp.eye(Aij.shape[0])
+    Aij = Aij + 10 * jnp.eye(Aij.shape[0])
     B_i = jnp.dot(jacobian.T, E_loc) 
     if is_tc:
         B_i = B_i - tc_adjust
     grads = jax.scipy.sparse.linalg.cg(Aij, B_i)[0]
+    jax.debug.print("Aij={x}",x=Aij)
      #jnp.linalg.pinv(Aij,rtol=1e-10)@B_i#
     # maxiter = 100
     return grads
@@ -276,7 +279,7 @@ def create_train_state_VITE(rng, model, variables, optimizer=optax.sgd):
     return TrainState.create(apply_fn=model.apply, params=variables['params'], tx=tx)
 
 def trainer_tc_stationary(state , hamiltonian, sampler):
-    grads, (r_square, energy, new_sample_core,norm) = stationery_grads1(state, hamiltonian, sampler)
+    grads, (r_square, energy, new_sample_core,norm, ci_core) = stationery_grads(state, hamiltonian, sampler)
     
     state = state.apply_gradients(grads=grads)
     sampler = sampler.update_core_space(new_sample_core)
@@ -284,10 +287,94 @@ def trainer_tc_stationary(state , hamiltonian, sampler):
 
     return state, r_square, energy, norm, sampler, jnp.linalg.norm(grads)
 
-
-
 @jax.jit
-def stationery_grads1(state, hamiltonian , sampler):
+def trainer_tc_stationary2(state , hamiltonian, sampler):
+    grads, (r_square, energy, new_sample_core,norm, ci_core) = stationery_grads(state, hamiltonian, sampler)
+
+    jacobian, tc_adjust = jacobian_normalized(state, sampler.core_space, ci_core, norm, energy)
+    grads, unravel_fn = jax.flatten_util.ravel_pytree(grads)
+    Aij = jacobian.T @ jacobian + 1e-7*jnp.eye(jacobian.shape[1])
+    grads = jax.scipy.sparse.linalg.cg(Aij, grads)[0]
+    grad_nrom = jnp.linalg.norm(grads)
+    grads = unravel_fn(grads)
+    state = state.apply_gradients(grads=grads)
+    sampler = sampler.update_core_space(new_sample_core)
+    
+    return state, r_square, energy, norm, sampler, grad_nrom
+
+
+@partial(jax.jit, static_argnames=["is_tc", "solver"])
+def trainer_tc_stationary3(state:TrainState, hamiltonian: Hamiltonian, sampler : FSSC , is_tc=t.is_tc, proj_matrix = None,solver = 'SR'):
+    energy, new_sample_core, ci_core, H_E_at_Ci, Norm, H_E, E_loc  = energy_fn2(state, hamiltonian, sampler)
+    jacobian, tc_adjust =  jacobian_normalized(state, sampler.core_space, ci_core, Norm, energy)
+
+    jacobian = H_E@jacobian
+    # grads , unravel_fn = jax.flatten_util.ravel_pytree(grads)
+    grads =  -1*vite_solver(jacobian, H_E_at_Ci, tc_adjust, is_tc ,proj_matrix=proj_matrix ,method = solver)
+    
+    sampler = sampler.update_core_space(new_sample_core)
+
+    loss_r = jnp.dot(E_loc-energy*ci_core, E_loc-energy*ci_core)
+    _, unravel_fn = jax.flatten_util.ravel_pytree(state.params)
+    grads = unravel_fn(grads)
+    state = state.apply_gradients(grads=grads)
+
+    if solver=='projectedSR': # Incomplete
+        return state, energy, sampler, jacobian.T @ jacobian
+    else:
+        return state, energy, sampler, loss_r
+
+
+def energy_fn2(state, hamiltonian: Hamiltonian, sampler: FSSC):
+    """
+    Computes the local energy and prepares new sampling points.
+
+    Args:
+        state (TrainState): Holds parameters for the wavefunction model.
+        hamiltonian (Hamiltonian): Defines the system Hamiltonian.
+        sampler (FSSC): Manages sampling of core and connected spaces.
+
+    Returns:
+        float: Computed energy.
+        jnp.ndarray: Newly selected sample core.
+        jnp.ndarray: Normalized core coefficients.
+        jnp.ndarray: Local energy contributions.
+        float: Norm of the core coefficients.
+    """
+
+    # if sampler.n_core==sampler.n_batch:
+    sample , Hij_Hji = sampler.next_sample_stored(hamiltonian)
+    unique_full , idx = sample
+    Ci = state.apply_fn({'params': state.params},unique_full)
+    ci_core, ci_connected = Ci[idx][:sampler.n_core], Ci[idx][sampler.n_core:].reshape(sampler.n_core,-1)
+    norm = jnp.linalg.norm(ci_core)
+    ci_core, ci_connected = ci_core/norm, ci_connected/norm
+    next_sample_idx = jnp.argsort(jnp.abs(Ci),descending =True)[:sampler.n_core]
+    E_loc = jax.tree.map(lambda H: jnp.einsum('ij,ij->i', H,ci_connected), Hij_Hji )## introduce tree.map here
+    energy = jnp.dot(ci_core,E_loc[0]) ## eloc [0] for pytree here left eigenvector as corespace
+    #jnp.sum(ci_core)*jnp.sum(E_loc[0])
+    new_sample_core = unique_full[next_sample_idx]
+    
+    E_loc = E_loc[0]
+    H_E = Hij_Hji[0].T.at[0].set(Hij_Hji[0].T[0]-energy)
+    #:, 0
+    H_E_at_Ci = H_E @ ci_core
+    # def R_square(params, energy, Hij):
+    #     Ci = state.apply_fn({'params': params},unique_full)
+    #     ci_core, ci_connected = Ci[idx][:sampler.n_core], Ci[idx][sampler.n_core:].reshape(sampler.n_core,-1)
+    #     E_loc = jnp.einsum('ij,ij->i', Hij,ci_connected)
+    #     norm = jnp.linalg.norm(ci_core)
+    #     # e = jnp.dot(ci_core, E_loc)/norm
+
+    #     R = (E_loc- energy*ci_core)/norm
+    #     return jnp.dot(R,R)
+
+    
+    # r_square, grads = jax.value_and_grad(R_square)(state.params, energy,  Hij_Hji[0])
+
+    return energy, new_sample_core, ci_core, H_E_at_Ci, norm, H_E, E_loc#,#r_square#, ci_connected
+@jax.jit
+def stationery_grads(state, hamiltonian , sampler):
  
     sample , Hij1 = sampler.next_sample_stored(hamiltonian)
     unique_full , idx = sample
@@ -314,4 +401,27 @@ def stationery_grads1(state, hamiltonian , sampler):
     
     r_square, grads = jax.value_and_grad(R_square)(state.params, energy, Hij)
 
-    return grads , (r_square, energy , new_sample_core, norm)
+    return grads , (r_square, energy , new_sample_core, norm, ci_core)
+
+
+# Failed Experiment 
+# @jax.jit
+# def pretrainer_hf_energy(state, hamiltonian: Hamiltonian, sampler: FSSC, hf_energy: float):
+#     energy ,grads = jax.value_and_grad(energy_pretrainer)(state.params,state, hamiltonian, sampler)
+#     loss = (energy - hf_energy)**2
+#     grads = jax.tree.map(lambda x: 2*(energy - hf_energy)*x, grads)
+#     state = state.apply_gradients(grads=grads)
+#     return state, energy, loss
+    
+# @jax.jit
+# def energy_pretrainer(params, state, hamiltonian: Hamiltonian, sampler: FSSC):
+#     sample , Hij_Hji = sampler.next_sample_stored(hamiltonian)
+#     unique_full , idx = sample
+#     Ci = state.apply_fn({'params': params},unique_full)
+#     ci_core, ci_connected = Ci[idx][:sampler.n_core], Ci[idx][sampler.n_core:].reshape(sampler.n_core,-1)
+#     norm = jnp.linalg.norm(ci_core)
+#     ci_core, ci_connected = ci_core/norm, ci_connected/norm
+    
+#     E_loc = jax.tree.map(lambda H: jnp.einsum('ij,ij->i', H,ci_connected), Hij_Hji )## introduce tree.map here
+#     energy = jnp.dot(ci_core,E_loc[0])
+#     return energy

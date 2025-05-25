@@ -1,13 +1,13 @@
 import pyscf 
 
-learning_rate = (0.01,0.01,1500) #(0.3,0.01,500)
+learning_rate = (0.01,0.005,1500) #(0.3,0.01,500)
 num_epochs = 15000
-n_core = 128#4096*4
+n_core = 200#4096*4
 n_batch = n_core
 hidden_layer_sizes =[4,4]
 
 mol = pyscf.M(
-    atom = 'Li 0 0 0; H 0 0 1 ' , #  H 0 0 3.0;  H 0 0 4.0 , # H 0 0 3.0; H 0 0 4.0  ,
+    atom = 'He 0 0 0 ' , #  H 0 0 3.0;  H 0 0 4.0 , # H 0 0 3.0; H 0 0 4.0  ,
     basis = 'ccpvtz',
     
     spin = 0,

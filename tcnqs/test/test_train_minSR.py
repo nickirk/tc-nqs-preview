@@ -85,26 +85,28 @@ def test_backflow_vite(mol,n_core,num_epochs=2400, test=False ,random_key=17 ):
     # ci_data = jax.vmap(hamiltonian, in_axes=(0,0))(sampler.core_space, sampler.core_space)
 
     ci_data = jnp.concatenate([jnp.expand_dims(hamiltonian(sampler.core_space[0], sampler.core_space[0]),axis=0),jnp.zeros(sampler.n_core-1)], axis=0)
-
-    for epoch in range(min(num_epochs//20,100)):
-    # for epoch in range(1):
-        state_bf, energy, pre_loss = trainer.pretrainer(state_bf, hamiltonian, sampler, ci_data)
+    
+    for epoch in range(min(num_epochs//20,150)):
+        state_bf, energy, pre_loss = trainer.pretrainer_hf_state(state_bf, hamiltonian, sampler, ci_data)
+        # state_bf, energy, pre_loss = trainer.pretrainer_hf_energy(state_bf, hamiltonian, sampler, hf_energy=myhf.e_tot)
         train_losses_bf.append(energy)
-        # print(f"Pretraining Epoch: {epoch+1}, Loss: {energy}, Pre_loss: {pre_loss} ")
         logging.info(f"Pretraining Epoch: {epoch+1}, Loss: {energy}, Pre_loss: {pre_loss} ")
-    tx = optax.adam(learning_rate=t.learning_rate[1])
+    
+    # tx = optax.adam(learning_rate=t.learning_rate[1])
+    tx = optax.sgd(learning_rate=t.learning_rate[1])
     state_bf = state_bf.replace(tx = tx)
     
     for epoch in range(num_epochs):
-        a = time.time()
-        state_bf, loss_bf, energy, norm, sampler, grad_norm  = trainer.trainer_tc_stationary(state_bf, hamiltonian, sampler)
-        
-        # trainer.trainer_vite(state_bf, hamiltonian, sampler , solver='SR')
+        # a = time.time()
+        state_bf, energy, sampler, loss = trainer.trainer_tc_stationary3(state_bf, hamiltonian, sampler, solver = 'SR')
+        # state_bf, loss_bf, energy, norm, sampler, grad_norm = trainer.trainer_tc_stationary(state_bf,hamiltonian,sampler)
+        # state_bf, energy, sampler = trainer.trainer_vite(state_bf, hamiltonian, sampler , solver='SR')
         # loss_bf.block_until_ready()
         train_losses_bf.append(energy)
-        b = time.time()
+        # b = time.time()
         # print(f"Epoch: {epoch+1}, Loss_bf: {loss_bf}, Time taken: {b-a} ") #, Time taken: {b-a}
-        logging.info(f"Epoch: {epoch+1}, Loss_bf: {loss_bf}, energy: {energy}, norm: {norm}, grad_norm = {grad_norm} ")
+        # logging.info(f"Epoch: {epoch+1}, Loss_bf: {loss_bf}, energy: {energy}, norm: {norm}, grad_norm = {grad_norm} ")
+        logging.info(f"Epoch: {epoch+1}, Loss_bf: {loss}, energy = {energy} ")
     # train_losses_bf.block_until_ready()
     # jax.device_get(train_losses_bf)
     # jax.profiler.stop_trace()
