@@ -14,7 +14,7 @@ from tcnqs.hamiltonian import Hamiltonian
 from tcnqs.fcidump import read_2_spin_orbital_seprated as read2
 
 from pytc.xtc import XTC
-from pytc.jastrow import SimpleJastrow,SM7,SM17
+from pytc.jastrow import SimpleJastrow,SM7,SM17, REXP
 from pytc.utils import fcidump as fcidump_pytc
 from pytc.autodiff.optimize import optimize_jastrow
 from pytc.autodiff.optimize import REXP
@@ -105,6 +105,7 @@ def generate_fci_dump(myhf, filename:str, is_tc:bool):
     else:
         mol = myhf.mol
         my_jastrow = SM7(atom=mol.atom_symbol(0))
+        #my_jastrow = REXP(np.array([1.]))
         my_xtc = XTC(myhf, my_jastrow, grid_lvl=2)
         
         h1e_xtc = my_xtc.get_1b()

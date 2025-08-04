@@ -1,6 +1,8 @@
 # Local notes
 notes/*.ipynb
+notes/*.txt
 /tcnqs/simulations/
+.jax-metal
 *.pkl
 # Byte-compiled / optimized / DLL files
 __pycache__/
