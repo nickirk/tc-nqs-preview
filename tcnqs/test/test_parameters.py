@@ -1,14 +1,14 @@
 import pyscf 
 
-learning_rate = (0.01,0.005,1500) #(0.3,0.01,500)
+learning_rate = (0.01,0.01,1500) #(0.3,0.01,500)
 num_epochs = 15000
-n_core = 200
+n_core = 150
 n_batch = n_core
 hidden_layer_sizes =[4,4]
 
 mol = pyscf.M(
-    atom = 'He 0 0 0 ' , #  H 0 0 3.0;  H 0 0 4.0 , # H 0 0 3.0; H 0 0 4.0  ,
-    basis = 'ccpvdz',
+    atom = 'Li 0 0 0; H 0 0 1' , #  H 0 0 3.0;  H 0 0 4.0 , # H 0 0 3.0; H 0 0 4.0  ,
+    basis = 'sto-3g',
     
     spin = 0,
     charge = 0,
@@ -18,7 +18,7 @@ mol = pyscf.M(
 n_bf_dets = 1
 n_eig_projections = 50
 save = 1 #True  
-is_tc = 1 #True
+is_tc = 0 #True
 
 # learning_rate = (0.3,0.01,500)
 # num_epochs = 20

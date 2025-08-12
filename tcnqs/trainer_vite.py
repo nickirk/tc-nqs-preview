@@ -32,8 +32,9 @@ def trainer_vite(state:TrainState,
     # Get energy and new core space
     energy, new_sample_core, ci_core, E_loc, Norm  = energy_fn(state, hamiltonian, sampler)
 
-    jacobian, tc_adjust = jacobian_normalized(state, sampler.core_space, ci_core, Norm, energy)
-    grads =  vite_solver(jacobian, E_loc, ci_core, energy, tc_adjust, is_tc,
+    jacobian = generate_jacobian(state, sampler.core_space)/Norm
+    
+    grads =  vite_solver(jacobian, E_loc, ci_core, energy, is_tc,
                          proj_matrix=proj_matrix,method = solver)
     sampler = sampler.update_core_space(new_sample_core)
 
@@ -84,7 +85,7 @@ def energy_fn(state, hamiltonian: Hamiltonian, sampler: FSSC):
         norm = jnp.linalg.norm(ci_core)
         next_sample_idx = jnp.argsort(jnp.abs(Ci),descending =True)[:sampler.n_core]
         E_loc = jax.tree.map(lambda H: jnp.einsum('ij,ij->i', H,ci_connected), Hij_Hji )## introduce tree.map here
-        energy = jnp.dot(ci_core, E_loc[0])/norm 
+        energy = jnp.dot(ci_core, E_loc[0])/norm**2 
         new_sample_core = unique_full[next_sample_idx]
         # TODO: remove the extra dimension of E_loc 
         E_loc = E_loc[0]
@@ -151,9 +152,6 @@ def generate_jacobian(state, slater_det):
 @jax.jit
 def jacobian_normalized(state, core_space, ci_core, norm, energy):
     """
-    TODO: This function is not needed, safely remove it.
-    Computes the normalized Jacobian by removing the projection on ci_core and dividing by norm.
-
     Args:
         state (TrainState): Training state with model parameters and apply function.
         core_space (jnp.ndarray): Core space configurations used for Jacobian computation.
@@ -164,30 +162,36 @@ def jacobian_normalized(state, core_space, ci_core, norm, energy):
         jnp.ndarray: Normalized Jacobian.
     """
     Jacobian = generate_jacobian(state, core_space) 
-    return Jacobian , 0
+    Jacobian = (Jacobian - jnp.outer(ci_core,  jnp.dot(Jacobian.T, ci_core))) / norm
+    # return Jacobian
+    return Jacobian
 
     
-def Stochastic_Reconfiguration(jacobian, E_loc, ci_core, energy, tc_adjust, is_tc):
+def Stochastic_Reconfiguration(jacobian, E_loc, ci_core, energy, is_tc):
     """
-    Performs the Stochastic Reconfiguration method for gradient computation.
+    Performs the Stochastic Reconfiguration method for gradient computation,
+    and adds a small Gaussian noise to the gradients.
 
     Args:
         jacobian (jnp.ndarray): Jacobian matrix of the wavefunction model.
         E_loc (jnp.ndarray): Local energies corresponding to each sample.
         ci_core (jnp.ndarray): Core coefficients of the wavefunction, unnormalized.
         energy (float): Energy of the system.
+        is_tc (bool): Flag indicating time‐consistency.
 
     Returns:
-        jnp.ndarray: Computed gradients using CG on the SR matrix.
+        jnp.ndarray: Computed gradients with added Gaussian noise.
     """
     Aij = jacobian.T @ jacobian
-    Aij = Aij + 1e-5 * jnp.eye(Aij.shape[0])
+    Aij = Aij + 1e-7 * jnp.eye(Aij.shape[0])
     B_i = jnp.dot(jacobian.T, E_loc) 
     B_i -= energy * jnp.dot(jacobian.T, ci_core)
     # TODO: test how tight the convergence in cg method should be
-    #grads = jax.scipy.sparse.linalg.cg(Aij, -B_i)[0]
-    grads = jnp.linalg.pinv(Aij,rtol=1e-10) @ B_i
-    return grads
+    # grads = jax.scipy.sparse.linalg.cg(Aij, B_i, tol=1e-10)[0]
+    grads = jnp.linalg.pinv(Aij, rtol=1e-10) @ B_i
+    # Generate Gaussian noise with mean 0 and standard deviation 1e-2
+    # noise = jax.random.normal(, shape=grads.shape) * 1e-2
+    return grads #+ noise
 
 def MinSR(jacobian, E_loc):
     """
@@ -229,8 +233,7 @@ def projected_SR(jacobian, E_loc, proj_matrix):
 def vite_solver(jacobian: jnp.ndarray, 
                 E_loc: jnp.ndarray, 
                 ci_core: jnp.ndarray,
-                energy: float,
-                tc_adjust:jnp.ndarray, 
+                energy: float, 
                 is_tc:bool,
                 proj_matrix: jnp.ndarray = None,
                 method: str = 'SR'):
@@ -241,7 +244,6 @@ def vite_solver(jacobian: jnp.ndarray,
         jacobian (jnp.ndarray): Jacobian matrix of the wavefunction model.
         E_loc (jnp.ndarray): Local energies for each sample.
         ci_core (jnp.ndarray): Core coefficients of the wavefunction, unnormalized.
-        tc_adjust (jnp.ndarray): adjustment for B_i in SR.
         proj_matrix (jnp.ndarray, optional): Projection matrix for the 'Projections' method.
         method (str, optional): Solver method ('SR', 'MinSR', or 'Projections').
 
@@ -249,7 +251,7 @@ def vite_solver(jacobian: jnp.ndarray,
         jnp.ndarray: Computed gradients based on the selected solver.
     """
     if method == 'SR':
-        return Stochastic_Reconfiguration(jacobian, E_loc, ci_core, energy, tc_adjust ,is_tc)
+        return Stochastic_Reconfiguration(jacobian, E_loc, ci_core, energy, is_tc)
     elif method == 'minSR':
         return MinSR(jacobian, E_loc)
     elif method == 'projectedSR':
@@ -261,7 +263,7 @@ def vite_solver(jacobian: jnp.ndarray,
 # Without ADAM
 def create_train_state_VITE(rng, model, variables, optimizer=optax.sgd):
     scheduler = optax.linear_schedule(init_value=t.learning_rate[0], end_value=t.learning_rate[1], transition_steps=t.learning_rate[2])
-    tx = optax.adam(learning_rate=scheduler)
+    tx = optax.sgd(learning_rate=scheduler)
     return TrainState.create(apply_fn=model.apply, params=variables['params'], tx=tx)
 
 def trainer_tc_stationary(state , hamiltonian, sampler):
@@ -277,7 +279,7 @@ def trainer_tc_stationary(state , hamiltonian, sampler):
 def trainer_tc_stationary2(state , hamiltonian, sampler):
     grads, (r_square, energy, new_sample_core,norm, ci_core) = stationery_grads(state, hamiltonian, sampler)
 
-    jacobian, tc_adjust = jacobian_normalized(state, sampler.core_space, ci_core, norm, energy)
+    jacobian = jacobian_normalized(state, sampler.core_space, ci_core, norm, energy)
     grads, unravel_fn = jax.flatten_util.ravel_pytree(grads)
     Aij = jacobian.T @ jacobian + 1e-7*jnp.eye(jacobian.shape[1])
     grads = jax.scipy.sparse.linalg.cg(Aij, grads)[0]
@@ -292,11 +294,11 @@ def trainer_tc_stationary2(state , hamiltonian, sampler):
 @partial(jax.jit, static_argnames=["is_tc", "solver"])
 def trainer_tc_stationary3(state:TrainState, hamiltonian: Hamiltonian, sampler : FSSC , is_tc=t.is_tc, proj_matrix = None,solver = 'SR'):
     energy, new_sample_core, ci_core, H_E_at_Ci, Norm, H_E, E_loc  = energy_fn2(state, hamiltonian, sampler)
-    jacobian, tc_adjust =  jacobian_normalized(state, sampler.core_space, ci_core, Norm, energy)
+    jacobian =  jacobian_normalized(state, sampler.core_space, ci_core, Norm, energy)
 
     jacobian = H_E@jacobian
     # grads , unravel_fn = jax.flatten_util.ravel_pytree(grads)
-    grads =  -1*vite_solver(jacobian, H_E_at_Ci, tc_adjust, is_tc ,proj_matrix=proj_matrix ,method = solver)
+    grads =  -1*vite_solver(jacobian, H_E_at_Ci, is_tc ,proj_matrix=proj_matrix ,method = solver)
     
     sampler = sampler.update_core_space(new_sample_core)
 

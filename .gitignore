@@ -175,3 +175,4 @@ cython_debug/
 
 #temperory files
 /tmp/
+/wandb/

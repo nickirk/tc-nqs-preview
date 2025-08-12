@@ -34,7 +34,7 @@ class FSSC(Sampler):
     
 
    
-    @jax.jit   
+    # @jax.jit   
     def initialize(self): # -> tuple[jnp.ndarray, jnp.ndarray]:
         alpha = jnp.concatenate((jnp.ones(self.n_elec_a),jnp.zeros(int(self.n_spac_orb/2)-self.n_elec_a)), dtype=jnp.int8)
         beta = jnp.concatenate((jnp.ones(self.n_elec_b),jnp.zeros(int(self.n_spac_orb/2)-self.n_elec_b)), dtype=jnp.int8)
@@ -48,7 +48,7 @@ class FSSC(Sampler):
         def generate_core_space(core_space):
             # Assumption: Jax will return padding as the 0th element when taking jnp.unique 
             # padding == jnp.zeros(self.n_spac_orb)
-            connections =  self._vmap_generate_connected_space(core_space[:self.n_core//num_connections+1])
+            connections =  self._vmap_generate_connected_space(core_space[:self.n_core//num_connections+10])
             connections = jnp.reshape(connections,(-1, self.n_spac_orb))
             #core_space = jnp.concatenate((core_space,connections))
             core_space = jnp.unique(connections,axis = 0,size=self.n_core+1,fill_value=jnp.zeros(self.n_spac_orb))

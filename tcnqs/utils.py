@@ -1,9 +1,12 @@
 import os
 
-from scipy import optimize
+# from matplotlib.pylab import f
+
 os.environ["JAX_PLATFORM_NAME"] = "cuda"
 # os.environ['XLA_PYTHON_CLIENT_MEM_FRACTION'] = '1'
 os.environ['CUDA_VISIBLE_DEVICES'] = '0'
+import time
+import wandb
 
 import jax.numpy as jnp
 import numpy as np
@@ -19,6 +22,7 @@ from pytc.utils import fcidump as fcidump_pytc
 from pytc.autodiff.optimize import optimize_jastrow
 from pytc.autodiff.optimize import REXP
 from pytc.autodiff import xtc
+
 
 def generate_ci_data(num_orbitals:int, num_alpha_electrons:int, num_beta_electrons:int, ci_vector):
     """
@@ -181,8 +185,8 @@ def build_ham_from_pyscf(mol, myhf, is_tc= False):
         os.makedirs(save_path, exist_ok=True)
         fcidump_file = save_path + 'fcidump'
 
-    if not os.path.exists(fcidump_file):
-        generate_fci_dump(myhf, fcidump_file, is_tc)
+    # if not os.path.exists(fcidump_file):
+    generate_fci_dump(myhf, fcidump_file, is_tc)
     
     n_sites, n_elec, ecore, h1e_s, g2e_s = read2(fcidump_file,is_tc=is_tc)
 
@@ -193,3 +197,56 @@ def build_ham_from_pyscf(mol, myhf, is_tc= False):
     # Create FCI Hamiltonian
     hamiltonian = Hamiltonian(n_elec_a, n_elec_b, 2*n_sites, ecore, h1e_s, g2e_s , is_tc=is_tc)
     return hamiltonian
+
+def wandb_init(mol,t_params):
+    """Initialize a wandb run if library present. Returns run or None.
+
+    Run name encodes system + key training hyperparameters for sweep grouping.
+    """
+    config = {
+        'learning_rate': t_params.learning_rate,
+        'num_epochs': t_params.num_epochs,
+        'n_core': t_params.n_core,
+        'n_batch': getattr(t_params, 'n_batch', t_params.n_core),
+        'hidden_layer_sizes': t_params.hidden_layer_sizes,
+        'n_bf_dets': t_params.n_bf_dets,
+        'n_eig_projections': t_params.n_eig_projections,
+        'is_tc': t_params.is_tc,
+        'save': t_params.save,
+        'basis': getattr(mol, 'basis', None),
+        'atom_spec': getattr(mol, 'atom', None),
+    }
+    timestamp = time.strftime('%Y%m%d_%H%M%S')
+    atom_compact = str(config['atom_spec']).replace(' ', '').replace(';', '_')
+    run_name = (
+        f"{atom_compact}_basis={config['basis']}_lr={t_params.learning_rate}_"
+        f"ncore={t_params.n_core}_hl={'x'.join(map(str, t_params.hidden_layer_sizes))}_{timestamp}"
+    )
+    tags = [
+        f"basis:{config['basis']}",
+        f"ncore:{t_params.n_core}",
+        f"lr:{t_params.learning_rate}",
+        f"hl:{'x'.join(map(str, t_params.hidden_layer_sizes))}",
+        f"is_tc:{int(t_params.is_tc)}",
+        f"n_bf_dets:{t_params.n_bf_dets}"
+    ]
+    run = wandb.init(
+        project='tc-nqs',
+        name=run_name,
+        tags=tags,
+        config=config,
+        reinit=True,
+        mode=os.environ.get('WANDB_MODE', 'online'),  # allow user to set offline
+    )
+    return run
+
+
+def wandb_log_energy(run, energy, epoch):
+    if run is None:
+        return
+  
+    run.log({'epoch': epoch + 1, 'energy': float(energy)})
+
+
+
+    

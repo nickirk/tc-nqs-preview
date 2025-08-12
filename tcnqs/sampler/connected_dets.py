@@ -60,7 +60,7 @@ def generate_connected_space(determinant: jnp.array,
         # n_spa_orb = len(determinant)//2
         num_connections = (1 + comb(n_elec_a,2, exact=True)*comb(n_spa_orb-n_elec_a,2,exact=True)+comb(n_elec_b,2, exact=True)*comb(n_spa_orb-n_elec_b,2,exact=True)
                     + n_elec_a*n_elec_b*(n_spa_orb-n_elec_a)*(n_spa_orb-n_elec_b) + n_spa_orb*(n_elec_a+n_elec_b)- n_elec_a**2 - n_elec_b**2)
-        return jnp.zeros((num_connections, 2*n_spa_orb),dtype =jnp.int8)
+        return jnp.zeros((num_connections, 2*n_spa_orb),dtype = jnp.dtype(determinant))
     return jax.lax.cond(jnp.sum(determinant)==n_elec_a+n_elec_b,_generate_connected_space ,_generate_padding)
     
     
@@ -80,7 +80,7 @@ def single_excitations(determinant, particle_pos , hole_pos):
 
 @partial(jax.vmap, in_axes=(0,None))
 def excite_single(pair,determinant):
-    # excite = jnp.zeros((determinant.shape),dtype=jnp.uint8)
+    # excite = jnp.zeros((determinant.shape),dtype=jnp.int8)
     # excite = excite.at[pair].set(1)
     # return jnp.bitwise_xor(determinant,excite)
     return determinant.at[pair[0]].set(0).at[pair[1]].set(1)  
@@ -102,28 +102,28 @@ def excite_double(pair, particles_select, holes_select , determinant):
     a_i = particles_select[pair[0]]
     a_d_i = holes_select[pair[1]]
     # a = jnp.concatenate((holes_select[pair[1]],particles_select[pair[0]]))
-    # excite = jnp.zeros((determinant.shape),dtype=jnp.uint8)
+    # excite = jnp.zeros((determinant.shape),dtype=jnp.int8)
     # excite = excite.at[a].set(1)
     # return jnp.bitwise_xor(determinant,excite)
     return determinant.at[a_i].set(0).at[a_d_i].set(1)
     
 if __name__ == '__main__':
-    det= jnp.array([1,0,0,1,0,1,0,1,0,0], dtype=jnp.uint8)
+    det= jnp.array([1,0,0,1,0,1,0,1,0,0], dtype=jnp.int8)
     a = generate_connected_space(det,2,2)
     assert jnp.unique(a,axis=0).shape == (55,10) and a.shape == (55,10)
 
-    det= jnp.array([1,0,0,0,0,1,0,0,0,0], dtype=jnp.uint8)
+    det= jnp.array([1,0,0,0,0,1,0,0,0,0], dtype=jnp.int8)
     a = generate_connected_space(det,1,1)
     assert jnp.unique(a,axis=0).shape == (25,10) and a.shape == (25,10)
 
-    det= jnp.array([1,1,0,0,0,1,0,0,0,0], dtype=jnp.uint8)
+    det= jnp.array([1,1,0,0,0,1,0,0,0,0], dtype=jnp.int8)
     a = generate_connected_space(det,2,1)
     assert jnp.unique(a,axis=0).shape == (38,10) and a.shape == (38,10)
 
-    det= jnp.array([1,1,0,1,0,0], dtype=jnp.uint8)
+    det= jnp.array([1,1,0,1,0,0], dtype=jnp.int8)
     a = generate_connected_space(det,2,1)
     assert jnp.unique(a,axis=0).shape == (9,6) and a.shape == (9,6)
 
-    det= jnp.array([0,0,0,0], dtype=jnp.uint8)
+    det= jnp.array([0,0,0,0], dtype=jnp.int8)
     a = generate_connected_space(det,1,1)
     assert jnp.unique(a,axis=0).shape == (1,4) and a.shape == (4,4)
