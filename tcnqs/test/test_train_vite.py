@@ -1,7 +1,8 @@
 import os
-#os.environ["JAX_PLATFORM_NAME"] = "cuda"
-os.environ['XLA_PYTHON_CLIENT_MEM_FRACTION'] = '0.3'
-os.environ['CUDA_VISIBLE_DEVICES'] = '8'
+# os.environ["JAX_PLATFORMS"] = "cuda"
+# os.environ['CUDA_VISIBLE_DEVICES'] = '4,5,6'
+# os.environ['XLA_PYTHON_CLIENT_MEM_FRACTION'] = '0.3'
+
 
 # os.environ['XLA_FLAGS'] = '--xla_gpu_enable_tracing'
 os.environ['JAX_PLATFORMS'] = 'cpu'
@@ -27,26 +28,29 @@ def test_backflow_vite(mol,n_core,num_epochs=2400, test=False ,random_key=17 ):
     if test:
         jax.config.update("jax_enable_x64", True)
         jax.config.update("jax_debug_nans", True)
+        # jax.config.update("jax_cuda_visible_devices", 1)
     rng = random.PRNGKey(random_key)
+    rng, init_rng = jax.random.split(rng)
+    
     myhf = mol.RHF().run()
-    # cisolver = pyscf.fci.FCI(myhf)
-    # fci_e_pyscf, ci_vector=cisolver.kernel()
-    # cisolver = pyscf.fci.FCI(myhf)
-    # print("E FCI = ", fci_e_pyscf)
-    fci_e_pyscf = 0
+    cisolver = pyscf.fci.FCI(myhf)
+    fci_e_pyscf, ci_vector=cisolver.kernel()
+    cisolver = pyscf.fci.FCI(myhf)
+    print("E FCI = ", fci_e_pyscf)
+    # fci_e_pyscf = 0
     
     hamiltonian = build_ham_from_pyscf(mol, myhf, is_tc=t_params.is_tc)
     
     num_orbitals = hamiltonian.n_orb
 
-    model_bf, variables_bf = bf.create_model(rng, input_shape = num_orbitals, 
+    model_bf, variables_bf = bf.create_model(init_rng, input_shape = num_orbitals, 
                                             num_electrons = hamiltonian.n_elec,
                                             hidden_layer_sizes = t_params.hidden_layer_sizes, 
                                             activation='tanh', 
                                             n_bf_dets=t_params.n_bf_dets)
     
     variables_bf = jax.tree.map(lambda x: x.astype(jnp.float64), variables_bf)
-    state_bf = trainer.create_train_state_VITE(rng, model_bf, variables_bf)
+    state_bf = trainer.create_train_state_VITE(init_rng, model_bf, variables_bf)
     
     train_losses_bf = []
 
@@ -85,7 +89,7 @@ def test_backflow_vite(mol,n_core,num_epochs=2400, test=False ,random_key=17 ):
         
     for epoch in range(num_epochs):
         state_bf, loss_bf, sampler  = trainer.trainer_vite(state_bf, hamiltonian, sampler)
-        wandb_log_energy(wandb_run, loss_bf, epoch)
+        wandb_log_energy(wandb_run, loss_bf, epoch, fci_e_pyscf)
         # _wandb_log_params(wandb_run, state_bf, epoch, t_params, mol)
         train_losses_bf.append(loss_bf)
         print(f"Epoch: {epoch+1}, Loss_bf: {loss_bf}")
@@ -103,14 +107,18 @@ def test_backflow_vite(mol,n_core,num_epochs=2400, test=False ,random_key=17 ):
 
 if __name__ == '__main__':
     mol = t_params.mol
-    #print(jax.devices())
+    print(jax.devices())
     start = time.time()
     losses , fci_e_pyscf = test_backflow_vite(mol , random_key=15,n_core=t_params.n_core,
                                               num_epochs=t_params.num_epochs, test= True)
-    
-    # if t_params.save:
-    #     print("Saving to file")
-    #     jnp.save(f"tcnqs/simulations/vite_{mol.atom_symbol(0)+mol.atom_symbol(1)}_lr={t_params.learning_rate}_ncore={t_params.n_core}.npy",jnp.array(losses))
-    #     jnp.save(f"tcnqs/simulations/fci_{mol.atom_symbol(0)+mol.atom_symbol(1)}.npy",jnp.array(fci_e_pyscf))
+
+    if t_params.save:
+        save_path = f"tcnqs/simulations/SR/{mol.atom_symbol(0)}/{mol.atom}/{mol.basis}/ncore={t_params.n_core}/lr={t_params.learning_rate}/"
+        print("Saving to file:", save_path)
+        os.makedirs(save_path, exist_ok=True)  # Create directories if they don't exist
+        file_path = f"{save_path}/losses.npy"
+        jnp.save(file_path, jnp.array(losses))
+        # jnp.save(f"tcnqs/simulations/SR/{mol.atom}/ncore={t_params.n_core}/lr={t_params.learning_rate}.npy",jnp.array(losses))
+        jnp.save(f"tcnqs/simulations/fci_{mol.atom_symbol(0)}.npy",jnp.array(fci_e_pyscf))
     end = time.time()
     print("Time taken: ", end-start)

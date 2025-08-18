@@ -45,22 +45,23 @@ class FSSC(Sampler):
         ## ADDED: Add functionality to keep going untill maximum has reached
         ## USE: jax.lax.while
         
-        def generate_core_space(core_space):
-            # Assumption: Jax will return padding as the 0th element when taking jnp.unique 
-            # padding == jnp.zeros(self.n_spac_orb)
-            connections =  self._vmap_generate_connected_space(core_space[:self.n_core//num_connections+10])
-            connections = jnp.reshape(connections,(-1, self.n_spac_orb))
-            #core_space = jnp.concatenate((core_space,connections))
-            core_space = jnp.unique(connections,axis = 0,size=self.n_core+1,fill_value=jnp.zeros(self.n_spac_orb))
+        # def generate_core_space(core_space):
+        #     # Assumption: Jax will return padding as the 0th element when taking jnp.unique 
+        #     # padding == jnp.zeros(self.n_spac_orb)
             
-            # 1st element is padding because of the lexicographic sort(jnp.unique)
-            return core_space[1:]
-        #jnp.expand_dims(hartree_fock,axis=0)
-        init_value = jnp.unique(cisd_space,axis = 0,size=self.n_core,fill_value=jnp.zeros(self.n_spac_orb))
-        core_space = jax.lax.while_loop(lambda core_space:jnp.all(core_space[-1]==jnp.zeros_like(core_space[-1])),generate_core_space,init_value)
-        # core_space = self._vmap_generate_connected_space(cisd_space[1:])
-        # core_space = jnp.reshape(core_space,(-1, self.n_spac_orb))
-        # core_space = jnp.unique(core_space,axis=0,size=self.n_core ,fill_value=jnp.zeros(self.n_spac_orb))
+        #     connections =  self._vmap_generate_connected_space(core_space[:self.n_core//num_connections+10])
+        #     connections = jnp.reshape(connections,(-1, self.n_spac_orb))
+        #     #core_space = jnp.concatenate((core_space,connections))
+        #     core_space = jnp.unique(connections,axis = 0,size=self.n_core+1,fill_value=jnp.zeros(self.n_spac_orb))
+            
+        #     # 1st element is padding because of the lexicographic sort(jnp.unique)
+        #     return core_space[1:]
+        # #jnp.expand_dims(hartree_fock,axis=0)
+        # init_value = jnp.unique(cisd_space,axis = 0,size=self.n_core,fill_value=jnp.zeros(self.n_spac_orb))
+        # core_space = jax.lax.while_loop(lambda core_space:jnp.all(core_space[-1]==jnp.zeros_like(core_space[-1])),generate_core_space,init_value)
+        core_space = self._vmap_generate_connected_space(cisd_space[1:])
+        core_space = jnp.reshape(core_space,(-1, self.n_spac_orb))
+        core_space = jnp.unique(core_space,axis=0,size=self.n_core ,fill_value=jnp.zeros(self.n_spac_orb))
         self.core_space = core_space[::-1]
         # return core_space
         return self

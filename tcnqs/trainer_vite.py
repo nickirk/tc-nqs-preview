@@ -33,6 +33,8 @@ def trainer_vite(state:TrainState,
     energy, new_sample_core, ci_core, E_loc, Norm  = energy_fn(state, hamiltonian, sampler)
 
     jacobian = generate_jacobian(state, sampler.core_space)/Norm
+    #jacobian_normalized(state, sampler.core_space, ci_core, Norm, energy)
+    #generate_jacobian(state, sampler.core_space)/Norm
     
     grads =  vite_solver(jacobian, E_loc, ci_core, energy, is_tc,
                          proj_matrix=proj_matrix,method = solver)
@@ -100,7 +102,7 @@ def energy_fn(state, hamiltonian: Hamiltonian, sampler: FSSC):
         E_loc = E_loc.reshape(sampler.n_core,) / norm 
         energy = energy/norm**2
 
-    return energy, new_sample_core, ci_core, E_loc, norm#, ci_connected
+    return energy, new_sample_core, ci_core/norm, E_loc/norm, norm#, ci_connected
 
 def batched_energy_fn(carry, batch_core, state, hamiltonian, sampler):
     # TODO: Correct this batch function according to the new unbatched one.
@@ -144,7 +146,7 @@ def generate_jacobian(state, slater_det):
     """
     apply_fn = lambda params, sd: state.apply_fn({'params': params}, jnp.expand_dims(sd, axis=0))[0]
     jacobian_1d = jax.grad(apply_fn, argnums=0)(state.params, slater_det)
-    jacobian_1d = jax.tree_map(lambda x: jnp.reshape(x, (1, -1)), jacobian_1d)
+    jacobian_1d = jax.tree.map(lambda x: jnp.reshape(x, (1, -1)), jacobian_1d)
     jacobian_1d = jax.tree.flatten(jacobian_1d)[0]
     jacobian_1d = jnp.concatenate(jacobian_1d, axis=1)
     return jacobian_1d[0]
@@ -187,8 +189,8 @@ def Stochastic_Reconfiguration(jacobian, E_loc, ci_core, energy, is_tc):
     B_i = jnp.dot(jacobian.T, E_loc) 
     B_i -= energy * jnp.dot(jacobian.T, ci_core)
     # TODO: test how tight the convergence in cg method should be
-    # grads = jax.scipy.sparse.linalg.cg(Aij, B_i, tol=1e-10)[0]
-    grads = jnp.linalg.pinv(Aij, rtol=1e-10) @ B_i
+    # grads = jax.scipy.sparse.linalg.cg(Aij, B_i, maxiter=250)[0]
+    grads = jnp.linalg.pinv(Aij) @ B_i
     # Generate Gaussian noise with mean 0 and standard deviation 1e-2
     # noise = jax.random.normal(, shape=grads.shape) * 1e-2
     return grads #+ noise

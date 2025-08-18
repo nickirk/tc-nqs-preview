@@ -1,10 +1,5 @@
 import os
 
-# from matplotlib.pylab import f
-
-os.environ["JAX_PLATFORM_NAME"] = "cuda"
-# os.environ['XLA_PYTHON_CLIENT_MEM_FRACTION'] = '1'
-os.environ['CUDA_VISIBLE_DEVICES'] = '0'
 import time
 import wandb
 
@@ -185,8 +180,8 @@ def build_ham_from_pyscf(mol, myhf, is_tc= False):
         os.makedirs(save_path, exist_ok=True)
         fcidump_file = save_path + 'fcidump'
 
-    # if not os.path.exists(fcidump_file):
-    generate_fci_dump(myhf, fcidump_file, is_tc)
+    if not os.path.exists(fcidump_file):
+        generate_fci_dump(myhf, fcidump_file, is_tc)
     
     n_sites, n_elec, ecore, h1e_s, g2e_s = read2(fcidump_file,is_tc=is_tc)
 
@@ -215,6 +210,7 @@ def wandb_init(mol,t_params):
         'save': t_params.save,
         'basis': getattr(mol, 'basis', None),
         'atom_spec': getattr(mol, 'atom', None),
+        'vite_solver':"McArdle:original"
     }
     timestamp = time.strftime('%Y%m%d_%H%M%S')
     atom_compact = str(config['atom_spec']).replace(' ', '').replace(';', '_')
@@ -236,17 +232,14 @@ def wandb_init(mol,t_params):
         tags=tags,
         config=config,
         reinit=True,
-        mode=os.environ.get('WANDB_MODE', 'online'),  # allow user to set offline
+        mode=os.environ.get('WANDB_MODE', 'online'), 
     )
     return run
 
 
-def wandb_log_energy(run, energy, epoch):
+def wandb_log_energy(run, energy, epoch, e_fci_pyscf=0.0):
     if run is None:
         return
-  
-    run.log({'epoch': epoch + 1, 'energy': float(energy)})
 
-
-
-    
+    energy_diff = float(energy) - e_fci_pyscf
+    run.log({'epoch': epoch + 1, 'energy': float(energy), 'energy_diff': energy_diff})
