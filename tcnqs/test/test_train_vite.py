@@ -5,7 +5,7 @@ import os
 
 
 # os.environ['XLA_FLAGS'] = '--xla_gpu_enable_tracing'
-os.environ['JAX_PLATFORMS'] = 'cpu'
+# os.environ['JAX_PLATFORMS'] = 'cpu'
 import jax
 import jax.numpy as jnp
 from jax import random
@@ -116,7 +116,7 @@ if __name__ == '__main__':
         save_path = f"tcnqs/simulations/SR/{mol.atom_symbol(0)}/{mol.atom}/{mol.basis}/ncore={t_params.n_core}/lr={t_params.learning_rate}/"
         print("Saving to file:", save_path)
         os.makedirs(save_path, exist_ok=True)  # Create directories if they don't exist
-        file_path = f"{save_path}/losses.npy"
+        file_path = f"{save_path}/losses_{t_params.hidden_layer_sizes}_{t_params.n_bf_dets}.npy"
         jnp.save(file_path, jnp.array(losses))
         # jnp.save(f"tcnqs/simulations/SR/{mol.atom}/ncore={t_params.n_core}/lr={t_params.learning_rate}.npy",jnp.array(losses))
         jnp.save(f"tcnqs/simulations/fci_{mol.atom_symbol(0)}.npy",jnp.array(fci_e_pyscf))

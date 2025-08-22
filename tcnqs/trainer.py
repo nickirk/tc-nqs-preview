@@ -184,20 +184,24 @@ def energy(params,sample,ham_stored,state,sampler):
     Ci = Ci[idx]
     ci_core, ci_connected = Ci[:sampler.n_core], Ci[sampler.n_core:].reshape(sampler.n_core,-1)
     Norm = jnp.linalg.norm(ci_core)
-    e = jnp.dot(ci_core,jnp.einsum('ij,ij->i', ham_stored,ci_connected))/Norm**2
+    e = jnp.dot(ci_core,jnp.einsum('ij,ij->i', ham_stored[0],ci_connected))/Norm**2
     
     new_sample_core = unique_full[next_sample_idx]
-
+    # test_sample = jnp.all(jnp.sum(new_sample_core, axis=1) == sampler.n_elec_a+ sampler.n_elec_b)
+    # jax.debug.print("test sampling = {test_bool}", test_bool=test_sample)
+    # test_bool = jnp.all(jnp.unique(new_sample_core, axis=0, size=sampler.n_core) == jnp.unique(sampler.core_space, axis=0, size=sampler.n_core))
+    # jax.debug.print("test sampling = {test_bool}", test_bool=test_bool)
     #return e,new_sample_core
-    ## Try: numerator and denominator seprately 
     return e, new_sample_core
 #@partial(jax.jit)
 def new_state(state, sample ,ham_stored,sampler):
     #jax.grad = jax.grad(energy) only in first input
-    energy_sample ,grads = jax.value_and_grad(energy, argnums=0, has_aux = True)(state.params, sample, ham_stored, state, sampler)
+    (energy_val, new_sample) ,grads = jax.value_and_grad(energy, argnums=0, has_aux = True)(state.params, sample, ham_stored, state, sampler)
     new_state = state.apply_gradients(grads=grads)
-    sampler = sampler.update_core_space(energy_sample[1])
-    return new_state ,energy_sample[0],sampler ## energy , New sample 
+    grads, _ = jax.flatten_util.ravel_pytree(grads)
+    jax.debug.print("grad_norm = {grad_norm}", grad_norm =jnp.linalg.norm(grads) )
+    sampler = sampler.update_core_space(new_sample)
+    return new_state ,energy_val,sampler ## energy , New sample
 
 # @partial(jax.jit,static_argnums=(4))
 @jax.jit
@@ -224,7 +228,7 @@ def train_step_fssc_corespace(state, hamiltonian :Hamiltonian, sampler: FSSC):
     Ci = Ci[idx]
     ci_core, ci_connected = Ci[:sampler.n_core], Ci[sampler.n_core:].reshape(sampler.n_core,-1)
     
-    e_loc = jnp.einsum('ij,ij->i', ham_stored,ci_connected)
+    e_loc = jnp.einsum('ij,ij->i', ham_stored[0],ci_connected)
     
 
     def energy(params,core_space,e_loc):
@@ -245,7 +249,7 @@ def train_step_fssc_corespace(state, hamiltonian :Hamiltonian, sampler: FSSC):
     # grads = 2*jnp.dot(jacobian.T,e_loc)/Norm**2 - 2*e_val*jnp.dot(jacobian.T,ci_core)/Norm**2
     # grads = unravel_fn(grads)
 
-    state = state.apply_gradients(grads=grads)
+    state =state.apply_gradients(grads=grads)
     sampler = sampler.update_core_space(unique_full[next_sample_idx])
 
     return state, e_val, sampler
@@ -321,7 +325,7 @@ def train_step_batched(state, hamiltonian: Hamiltonian, sampler : FSSC):
     return new_state , value[0]/value[1] , sampler        ## energy , new_sample 
 
 def create_train_state(rng, model, variables):
-    tx = optax.adam(learning_rate = learning_rate)
+    tx = optax.adam(learning_rate = learning_rate[0])
     return train_state.TrainState.create(apply_fn=model.apply, params=variables['params'], tx=tx)
 
 @partial(jax.vmap, in_axes = (None,0))

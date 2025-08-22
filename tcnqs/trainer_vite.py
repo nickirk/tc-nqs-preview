@@ -32,19 +32,22 @@ def trainer_vite(state:TrainState,
     # Get energy and new core space
     energy, new_sample_core, ci_core, E_loc, Norm  = energy_fn(state, hamiltonian, sampler)
 
-    jacobian = generate_jacobian(state, sampler.core_space)/Norm
+    jacobian = generate_jacobian(state, sampler.core_space)#/Norm
     #jacobian_normalized(state, sampler.core_space, ci_core, Norm, energy)
     #generate_jacobian(state, sampler.core_space)/Norm
-    
+    # E_loc,ci_core =  
     grads =  vite_solver(jacobian, E_loc, ci_core, energy, is_tc,
-                         proj_matrix=proj_matrix,method = solver)
+                         proj_matrix=proj_matrix,method = solver) 
     sampler = sampler.update_core_space(new_sample_core)
-
+    jax.debug.print("grad_norm = {grad_norm}, ci_norm = {norm} ", grad_norm = jnp.linalg.norm(grads),norm = Norm)
+    
+    # grads = grads*Norm
+    
     # Apply gradients
     _, unravel_fn = jax.flatten_util.ravel_pytree(state.params)
     grads = unravel_fn(grads)
     state = state.apply_gradients(grads=grads)
-
+    
     if solver=='projectedSR': 
         return state, energy, sampler, jacobian.T @ jacobian
     else:
@@ -185,16 +188,17 @@ def Stochastic_Reconfiguration(jacobian, E_loc, ci_core, energy, is_tc):
         jnp.ndarray: Computed gradients with added Gaussian noise.
     """
     Aij = jacobian.T @ jacobian
-    Aij = Aij + 1e-7 * jnp.eye(Aij.shape[0])
+    Aij = Aij + 1e-17 * jnp.eye(Aij.shape[0])
     B_i = jnp.dot(jacobian.T, E_loc) 
     B_i -= energy * jnp.dot(jacobian.T, ci_core)
     # TODO: test how tight the convergence in cg method should be
     # grads = jax.scipy.sparse.linalg.cg(Aij, B_i, maxiter=250)[0]
-    grads = jnp.linalg.pinv(Aij) @ B_i
+    grads = jnp.linalg.pinv(Aij,rtol=1e-25) @ B_i
     # Generate Gaussian noise with mean 0 and standard deviation 1e-2
     # noise = jax.random.normal(, shape=grads.shape) * 1e-2
+    
     return grads #+ noise
-
+# -15, -17 
 def MinSR(jacobian, E_loc):
     """
     Minimizes the SR metric by inverting the projected Jacobian product.

@@ -186,9 +186,8 @@ def build_ham_from_pyscf(mol, myhf, is_tc= False):
     n_sites, n_elec, ecore, h1e_s, g2e_s = read2(fcidump_file,is_tc=is_tc)
 
     n_elec_a, n_elec_b = mol.nelec
-    h1e_s = jnp.asarray(h1e_s)
-    g2e_s = jnp.asarray(g2e_s)
-    
+    h1e_s = jnp.asarray(h1e_s, dtype=jnp.float64)
+    g2e_s = jnp.asarray(g2e_s, dtype=jnp.float64)
     # Create FCI Hamiltonian
     hamiltonian = Hamiltonian(n_elec_a, n_elec_b, 2*n_sites, ecore, h1e_s, g2e_s , is_tc=is_tc)
     return hamiltonian
