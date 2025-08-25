@@ -39,7 +39,7 @@ def trainer_vite(state:TrainState,
     grads =  vite_solver(jacobian, E_loc, ci_core, energy, is_tc,
                          proj_matrix=proj_matrix,method = solver) 
     sampler = sampler.update_core_space(new_sample_core)
-    # jax.debug.print("grad_norm = {grad_norm}, ci_norm = {norm} ", grad_norm = jnp.linalg.norm(grads),norm = Norm)
+    jax.debug.print("grad_norm = {grad_norm}, ci_norm = {norm} ", grad_norm = jnp.linalg.norm(grads),norm = Norm)
     
     # grads = grads*Norm
     
@@ -188,12 +188,12 @@ def Stochastic_Reconfiguration(jacobian, E_loc, ci_core, energy, is_tc):
         jnp.ndarray: Computed gradients with added Gaussian noise.
     """
     Aij = jacobian.T @ jacobian
-    Aij = Aij + 1e-17 * jnp.eye(Aij.shape[0])
+    Aij = Aij + 1e-12 * jnp.eye(Aij.shape[0])
     B_i = jnp.dot(jacobian.T, E_loc) 
     B_i -= energy * jnp.dot(jacobian.T, ci_core)
     # TODO: test how tight the convergence in cg method should be
-    # grads = jax.scipy.sparse.linalg.cg(Aij, B_i, maxiter=250)[0]
-    grads = jnp.linalg.pinv(Aij,rtol=1e-12) @ B_i
+    grads = jax.scipy.sparse.linalg.cg(Aij, B_i, maxiter=150)[0]
+    # grads = jnp.linalg.pinv(Aij,rtol=1e-12) @ B_i
     # Generate Gaussian noise with mean 0 and standard deviation 1e-2
     # noise = jax.random.normal(, shape=grads.shape) * 1e-2
     
@@ -419,3 +419,55 @@ def stationery_grads(state, hamiltonian , sampler):
 #     E_loc = jax.tree.map(lambda H: jnp.einsum('ij,ij->i', H,ci_connected), Hij_Hji )## introduce tree.map here
 #     energy = jnp.dot(ci_core,E_loc[0])
 #     return energy
+
+
+def energy_fn_hci(state, hamiltonian: Hamiltonian, sampler: FSSC):
+    apply_fn = lambda dets: state.apply_fn({'params': state.params}, dets)
+    n_hci = 90
+
+    e_local, (imp_dets, imp_ci) = jax.vmap(hamiltonian.hamiltonian_and_connections, in_axes=(0, None, None))(sampler.core_space, apply_fn, n_hci)
+    ci_core = apply_fn(sampler.core_space)
+    norm = jnp.linalg.norm(ci_core)
+    energy = jnp.dot(ci_core, e_local) / norm**2
+
+    imp_dets = imp_dets.reshape(-1, sampler.n_spac_orb)
+    imp_ci = imp_ci.reshape(-1)
+
+    imp_dets_unique, unique_idx = sampler._full_space_hci_(imp_dets, n_hci)
+    imp_ci_unique = imp_ci[unique_idx]
+
+    next_sample_idx = jnp.argsort(jnp.abs(imp_ci_unique), descending=True)[:sampler.n_core]
+    new_sample_core = imp_dets_unique[next_sample_idx]
+
+    return energy, new_sample_core, ci_core/norm, e_local/norm, norm
+
+@partial(jax.jit, static_argnames=["is_tc", "solver"])
+def trainer_hci(state:TrainState, 
+                 hamiltonian: Hamiltonian, 
+                 sampler : FSSC, 
+                 is_tc=t.is_tc, 
+                 proj_matrix = None,
+                 solver = 'SR'):
+   
+    energy, new_sample_core, ci_core, E_loc, Norm  = energy_fn_hci(state, hamiltonian, sampler)
+
+    jacobian = generate_jacobian(state, sampler.core_space)#/Norm
+    #jacobian_normalized(state, sampler.core_space, ci_core, Norm, energy)
+    #generate_jacobian(state, sampler.core_space)/Norm
+    # E_loc,ci_core =  
+    grads =  vite_solver(jacobian, E_loc, ci_core, energy, is_tc,
+                         proj_matrix=proj_matrix,method = solver) 
+    sampler = sampler.update_core_space(new_sample_core)
+    jax.debug.print("grad_norm = {grad_norm}, ci_norm = {norm} ", grad_norm = jnp.linalg.norm(grads),norm = Norm)
+    
+    # grads = grads*Norm
+    
+    # Apply gradients
+    _, unravel_fn = jax.flatten_util.ravel_pytree(state.params)
+    grads = unravel_fn(grads)
+    state = state.apply_gradients(grads=grads)
+    
+    if solver=='projectedSR': 
+        return state, energy, sampler, jacobian.T @ jacobian
+    else:
+        return state, energy, sampler

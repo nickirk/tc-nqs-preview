@@ -34,7 +34,7 @@ class FSSC(Sampler):
     
 
    
-    # @jax.jit   
+    @jax.jit   
     def initialize(self): # -> tuple[jnp.ndarray, jnp.ndarray]:
         alpha = jnp.concatenate((jnp.ones(self.n_elec_a),jnp.zeros(int(self.n_spac_orb/2)-self.n_elec_a)), dtype=jnp.int8)
         beta = jnp.concatenate((jnp.ones(self.n_elec_b),jnp.zeros(int(self.n_spac_orb/2)-self.n_elec_b)), dtype=jnp.int8)
@@ -45,23 +45,27 @@ class FSSC(Sampler):
         ## ADDED: Add functionality to keep going untill maximum has reached
         ## USE: jax.lax.while
         
-        # def generate_core_space(core_space):
-        #     # Assumption: Jax will return padding as the 0th element when taking jnp.unique 
-        #     # padding == jnp.zeros(self.n_spac_orb)
+        def generate_core_space(init_value):
+            # Assumption: Jax will return padding as the 0th element when taking jnp.unique 
+            # padding == jnp.zeros(self.n_spac_orb)
+            core_space = init_value[0]
+            iterator = init_value[1]
+            excite_space = jax.lax.dynamic_slice(core_space, (iterator,0), (self.n_core//num_connections,self.n_spac_orb) )
+            connections =  self._vmap_generate_connected_space(excite_space)
+            connections = jnp.reshape(connections,(-1, self.n_spac_orb))
+            #core_space = jnp.concatenate((core_space,connections))
+            connections = jnp.concatenate((core_space,connections),axis=0)
+            core_space = jnp.unique(connections,axis = 0,size=self.n_core+1,fill_value=jnp.zeros(self.n_spac_orb))
             
-        #     connections =  self._vmap_generate_connected_space(core_space[:self.n_core//num_connections+10])
-        #     connections = jnp.reshape(connections,(-1, self.n_spac_orb))
-        #     #core_space = jnp.concatenate((core_space,connections))
-        #     core_space = jnp.unique(connections,axis = 0,size=self.n_core+1,fill_value=jnp.zeros(self.n_spac_orb))
-            
-        #     # 1st element is padding because of the lexicographic sort(jnp.unique)
-        #     return core_space[1:]
-        # #jnp.expand_dims(hartree_fock,axis=0)
-        # init_value = jnp.unique(cisd_space,axis = 0,size=self.n_core,fill_value=jnp.zeros(self.n_spac_orb))
-        # core_space = jax.lax.while_loop(lambda core_space:jnp.all(core_space[-1]==jnp.zeros_like(core_space[-1])),generate_core_space,init_value)
-        core_space = self._vmap_generate_connected_space(cisd_space[1:])
-        core_space = jnp.reshape(core_space,(-1, self.n_spac_orb))
-        core_space = jnp.unique(core_space,axis=0,size=self.n_core ,fill_value=jnp.zeros(self.n_spac_orb))
+            # 1st element is padding because of the lexicographic sort(jnp.unique)
+            return core_space[1:], iterator+1
+        #jnp.expand_dims(hartree_fock,axis=0)
+        init_value = (jnp.unique(cisd_space,axis = 0,size=self.n_core,fill_value=jnp.zeros(self.n_spac_orb)), int(0))
+        core_space, iterator = jax.lax.while_loop(lambda core_space:jnp.all(core_space[0][-1]==jnp.zeros_like(core_space[0][-1])),generate_core_space,init_value)
+        
+        # core_space = self._vmap_generate_connected_space(cisd_space[1:])
+        # core_space = jnp.reshape(core_space,(-1, self.n_spac_orb))
+        # core_space = jnp.unique(core_space,axis=0,size=self.n_core ,fill_value=jnp.zeros(self.n_spac_orb))
         self.core_space = core_space[::-1]
         # return core_space
         return self
@@ -112,6 +116,15 @@ class FSSC(Sampler):
         unique_full, idx ,inverse_idx = jnp.unique(bin_full_space,return_index=True, size = self.n_full+1, return_inverse=True
                                         ,fill_value=jnp.zeros_like(bin_full_space[0]))
         return full_space[idx][1:], inverse_idx[:-1]-1
+
+    @partial(jax.jit, static_argnames=['n_hci_samples'])
+    def _full_space_hci_(self, hci_sample_space, n_hci_samples):
+        full_space = jnp.concatenate((hci_sample_space,jnp.zeros((1,self.n_spac_orb),dtype =jnp.int8)),axis=0)
+        bin_full_space = self._binary_to_int64(hci_sample_space)
+        unique_full, idx  = jnp.unique(bin_full_space,return_index=True, size = self.n_core*n_hci_samples+1
+                                        ,fill_value=jnp.zeros_like(bin_full_space[0]))
+        return full_space[idx][1:], idx[1:]
+    
 
     # @jax.jit
     def _ham_stored(self, sample_core, hamiltonain):

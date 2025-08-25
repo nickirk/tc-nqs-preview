@@ -196,13 +196,18 @@ class Hamiltonian:
 
     # @jax.jit
 
-    @partial(jax.jit, static_argnums=(2))
-    def hamiltonian_and_connections(self, det,  apply_fn=None):
+    @partial(jax.jit, static_argnums=(2,3))
+    def hamiltonian_and_connections(self, det,  apply_fn=None, n_hci=None):
         # return self.generate_hamiltonian_and_connections(det) 
-        return jax.lax.cond(jnp.sum(det)==self.n_elec_a+self.n_elec_b,self.generate_hamiltonian_and_connections ,self.padded_elements, det, apply_fn)
+        gen_function = lambda det: self.generate_hamiltonian_and_connections(det, apply_fn, n_hci)
+        gen_padding = lambda det: self.padded_elements(det, apply_fn, n_hci)
+        return jax.lax.cond(jnp.sum(det)==self.n_elec_a+self.n_elec_b, gen_function, gen_padding, det)
+    
+
+        # return jax.lax.cond(jnp.sum(det)==self.n_elec_a+self.n_elec_b,self.generate_hamiltonian_and_connections ,self.padded_elements, det, apply_fn, n_hci)
 
     # @jax.jit
-    def generate_hamiltonian_and_connections(self, det: jnp.array, apply_fn=None):
+    def generate_hamiltonian_and_connections(self, det: jnp.array, apply_fn=None, n_hci=None):
         n_spa_orb = self.n_orb // 2
         n_holes_a = n_spa_orb - self.n_elec_a
         n_holes_b = n_spa_orb - self.n_elec_b
@@ -230,13 +235,24 @@ class Hamiltonian:
         if self.n_elec_b > 1 and n_holes_b > 1:
             double_particle_hole_pair_b = self.double_excitations(particles_pos[self.n_elec_a:], holes_pos[n_holes_a:])
             ham_and_det =jax.tree.map(lambda x,y: jnp.concatenate((x,y), axis=0),ham_and_det, self.excitation_2(det, double_particle_hole_pair_b ))
-        if apply_fn is None:
+        
+        if apply_fn is None and n_hci is None:
             return ham_and_det
+        elif n_hci is not None and apply_fn is not None:
+            coefficients = apply_fn(ham_and_det[1])
+            e_local = ham_and_det[0][0] @ coefficients
+            imp_idx = jnp.argsort(jnp.abs(coefficients),descending =True)
+            important_determinants = ham_and_det[1][imp_idx[:n_hci]]
+            return e_local, (important_determinants, coefficients[imp_idx[:n_hci]])
+        
         else:
-            return ham_and_det[0] @ apply_fn(ham_and_det[1])
+            raise ValueError("Either both apply_fn and n_hci should be provided or neither.")
+    # @partial(jax.jit, static_argnums=(2))
+    # def select_important_det_idx(self, coefficients, N):
 
-    def padded_elements(self,det, apply_fn=None):
-        if apply_fn is None:
+    #     pass
+    def padded_elements(self,det, apply_fn=None, n_hci=None):
+        if apply_fn is None and n_hci is None:
             # return jnp.zeros(1), jnp.zeros((1, self.n_orb), dtype=jnp.int8)
             n_spa_orb = self.n_orb // 2
             num_connections = (1 +  comb(self.n_elec_a, 2, exact=True) * comb(n_spa_orb - self.n_elec_a, 2, exact=True) +
@@ -248,7 +264,7 @@ class Hamiltonian:
             else:
                 return (jnp.zeros(num_connections),jnp.zeros(num_connections)), jnp.zeros((num_connections, self.n_orb), dtype=jnp.int8)
         else:
-            return 0.0
+            return 0.0, (jnp.zeros((n_hci, self.n_orb), dtype=jnp.int8),jnp.zeros(n_hci))
 
     def possible_excitations(self, pairs_alpha, pairs_beta):
         i, j = jnp.meshgrid(jnp.arange(len(pairs_alpha)), jnp.arange(len(pairs_beta)), indexing='ij')

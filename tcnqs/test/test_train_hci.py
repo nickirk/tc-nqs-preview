@@ -1,7 +1,7 @@
 import os
 # os.environ["JAX_PLATFORMS"] = "cuda"
-os.environ['CUDA_VISIBLE_DEVICES'] = '0'
-os.environ['XLA_PYTHON_CLIENT_MEM_FRACTION'] = '0.3'
+os.environ['CUDA_VISIBLE_DEVICES'] = '2'
+# os.environ['XLA_PYTHON_CLIENT_MEM_FRACTION'] = '0.3'
 
 
 # os.environ['XLA_FLAGS'] = '--xla_gpu_enable_tracing'
@@ -34,11 +34,10 @@ def test_backflow_vite(mol,n_core,num_epochs=2400, test=False ,random_key=17 ):
     
     myhf = mol.RHF().run()
     cisolver = pyscf.fci.FCI(myhf)
-    # fci_e_pyscf, ci_vector=cisolver.kernel()
-    # cisolver = pyscf.fci.FCI(myhf)
-    fci_e_pyscf = 0
+    fci_e_pyscf, ci_vector=cisolver.kernel()
+    cisolver = pyscf.fci.FCI(myhf)
     print("E FCI = ", fci_e_pyscf)
-   
+    # fci_e_pyscf = 0
     
     hamiltonian = build_ham_from_pyscf(mol, myhf, is_tc=t_params.is_tc)
     
@@ -89,7 +88,7 @@ def test_backflow_vite(mol,n_core,num_epochs=2400, test=False ,random_key=17 ):
         wandb_run = None
         
     for epoch in range(num_epochs):
-        state_bf, loss_bf, sampler  = trainer.trainer_vite(state_bf, hamiltonian, sampler)
+        state_bf, loss_bf, sampler  = trainer.trainer_hci(state_bf, hamiltonian, sampler)
         wandb_log_energy(wandb_run, loss_bf, epoch, fci_e_pyscf)
         # _wandb_log_params(wandb_run, state_bf, epoch, t_params, mol)
         train_losses_bf.append(loss_bf)
