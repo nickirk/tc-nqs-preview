@@ -54,7 +54,7 @@ class Backflow(nn.Module):
         return jax.lax.select(jnp.sum(selected_config)==0, 0.0,jnp.float64(x))
 
 def positive_random_init(key, shape, dtype=jnp.float64):
-    return random.uniform(key, shape, dtype, minval=0.8, maxval=1.2)
+    return random.uniform(key, shape, dtype, minval=0.0, maxval=0.2)
 
 def create_model(rng, input_shape, num_electrons, hidden_layer_sizes,    
                  activation, n_bf_dets): 

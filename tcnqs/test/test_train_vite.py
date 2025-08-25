@@ -1,6 +1,6 @@
 import os
 # os.environ["JAX_PLATFORMS"] = "cuda"
-# os.environ['CUDA_VISIBLE_DEVICES'] = '4,5,6'
+os.environ['CUDA_VISIBLE_DEVICES'] = '2'
 # os.environ['XLA_PYTHON_CLIENT_MEM_FRACTION'] = '0.3'
 
 

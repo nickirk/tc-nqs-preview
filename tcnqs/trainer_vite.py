@@ -39,7 +39,7 @@ def trainer_vite(state:TrainState,
     grads =  vite_solver(jacobian, E_loc, ci_core, energy, is_tc,
                          proj_matrix=proj_matrix,method = solver) 
     sampler = sampler.update_core_space(new_sample_core)
-    jax.debug.print("grad_norm = {grad_norm}, ci_norm = {norm} ", grad_norm = jnp.linalg.norm(grads),norm = Norm)
+    # jax.debug.print("grad_norm = {grad_norm}, ci_norm = {norm} ", grad_norm = jnp.linalg.norm(grads),norm = Norm)
     
     # grads = grads*Norm
     
@@ -193,7 +193,7 @@ def Stochastic_Reconfiguration(jacobian, E_loc, ci_core, energy, is_tc):
     B_i -= energy * jnp.dot(jacobian.T, ci_core)
     # TODO: test how tight the convergence in cg method should be
     # grads = jax.scipy.sparse.linalg.cg(Aij, B_i, maxiter=250)[0]
-    grads = jnp.linalg.pinv(Aij,rtol=1e-25) @ B_i
+    grads = jnp.linalg.pinv(Aij,rtol=1e-12) @ B_i
     # Generate Gaussian noise with mean 0 and standard deviation 1e-2
     # noise = jax.random.normal(, shape=grads.shape) * 1e-2
     

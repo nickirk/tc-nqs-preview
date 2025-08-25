@@ -209,13 +209,13 @@ def wandb_init(mol,t_params):
         'save': t_params.save,
         'basis': getattr(mol, 'basis', None),
         'atom_spec': getattr(mol, 'atom', None),
-        'vite_solver':"McArdle:original"
+        
     }
     timestamp = time.strftime('%Y%m%d_%H%M%S')
     atom_compact = str(config['atom_spec']).replace(' ', '').replace(';', '_')
     run_name = (
         f"{atom_compact}_basis={config['basis']}_lr={t_params.learning_rate}_"
-        f"ncore={t_params.n_core}_hl={'x'.join(map(str, t_params.hidden_layer_sizes))}_{timestamp}"
+        f"ncore={t_params.n_core}_{timestamp}"
     )
     tags = [
         f"basis:{config['basis']}",
@@ -226,7 +226,7 @@ def wandb_init(mol,t_params):
         f"n_bf_dets:{t_params.n_bf_dets}"
     ]
     run = wandb.init(
-        project='tc-nqs',
+        project='final-runs-tcnqs',
         name=run_name,
         tags=tags,
         config=config,
