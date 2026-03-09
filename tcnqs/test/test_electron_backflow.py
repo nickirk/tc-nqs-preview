@@ -73,14 +73,10 @@ def test_electron_backflow(mol, n_core, num_epochs=2400, test=False ,random_key=
 
     for epoch in range(num_epochs):
         
-        state_bf, loss_bf, sampler, flag, stored = trainer.train_step_fssc(state_bf, 
-                                                                           hamiltonian, 
-                                                                           sampler, 
-                                                                           flag, 
-                                                                           stored)
-        train_losses_bf.append(loss_bf )
+        state_bf, loss_bf, sampler = trainer.train_step_fssc(state_bf, hamiltonian, sampler)
+        train_losses_bf.append(loss_bf)
         
-        print(f"Epoch {epoch+1} , Loss_bf: {loss_bf },{flag}")
+        print(f"Epoch {epoch+1} , Loss_bf: {loss_bf }")
    
     if test:
         assert jnp.absolute(train_losses_bf[-1]-fci_e_pyscf) < 5e-3

@@ -273,7 +273,7 @@ def batched_energy(params, carry ,state, stored, batch, sampler):
     #reshape into batchsize multiples
     ci_core, ci_connected = ci_reconstructed[:batch.shape[0]], ci_reconstructed[batch.shape[0]:].reshape(batch.shape[0],-1)
     denominator = jnp.linalg.norm(ci_core)**2
-    numerator = jnp.dot(ci_core,jnp.einsum('ij,ij->i', ham_stored,ci_connected))
+    numerator = jnp.dot(ci_core,jnp.einsum('ij,ij->i', ham_stored[0],ci_connected))
     
     max_indices = jnp.argsort(jnp.abs(ci_unique),descending =True)[:sampler.n_core]
     
@@ -291,7 +291,7 @@ def train_step_batched(state, hamiltonian: Hamiltonian, sampler : FSSC):
     #jax.grad = jax.grad(energy) only in first input
     
     def batched_value_and_grad(carry, batch):
-        stored = sampler.next_sample_stored_batch(batch,hamiltonian)
+        stored = sampler.next_sample_stored_batch(hamiltonian, batch)
         # Jax grad only in the first input of f2
         # f2_grad = jax.grad(f2, argnums=0) 
         

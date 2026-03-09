@@ -44,7 +44,20 @@ def test_hamiltonian(mol, test=False):
         print("Success: HF energies match!")
         assert jnp.absolute(fci_e_diagonal-fci_e_pyscf) < 1e-7 
         print("Success: FCI energies match!")
-        
+
+    return ham, ham.e_core
+
+def test_hamiltonian_jit(mol):
+    jax.config.update("jax_enable_x64", True)
+    myhf = mol.RHF().run()
+    ham = build_ham_from_pyscf(mol, myhf)
+    fci_e_pyscf, ci_vector = run_fci(mol, myhf)
+    x_train, y_train = generate_ci_data(ham.n_orb//2, ham.n_elec_a, ham.n_elec_b, ci_vector)
+    x_train = jnp.asarray(x_train)
+    jax_ham = jax.vmap(jax.vmap(ham, in_axes=(0, None)), in_axes=(None, 0))
+    H = jax_ham(x_train, x_train)
+    return H, ham.e_core
+
 # def test_hamiltonian_refactor(mol, test=False):
 #     if test:
 #         jax.config.update("jax_enable_x64", True)

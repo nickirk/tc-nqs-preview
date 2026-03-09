@@ -52,7 +52,7 @@ def test_backflow_unsupervised(mol, random_key, num_epochs=2400, test = False):
 
     model_bf, variables_bf = bf.create_model(rng, input_shape = num_orbitals,
                                 num_electrons=num_alpha_electrons+num_beta_electrons
-                                ,hidden_layer_sizes=[4],activation='tanh')
+                                ,hidden_layer_sizes=[4],activation='tanh', n_bf_dets=1)
     state_bf = trainer.create_train_state(rng, model_bf, variables_bf)
     
     # num_epochs = 400

@@ -17,7 +17,7 @@ mol = pyscf.M(
     )
 n_bf_dets = 1
 n_eig_projections = 50
-save = 1 #True  
+save = 0 #False
 is_tc = 0 #True
 # last 4,4 with 8 backflow layers
 

@@ -1,7 +1,7 @@
 import os
 # os.environ["JAX_PLATFORMS"] = "cuda"
 os.environ['CUDA_VISIBLE_DEVICES'] = '0'
-os.environ['XLA_PYTHON_CLIENT_MEM_FRACTION'] = '0.3'
+os.environ['XLA_PYTHON_CLIENT_MEM_FRACTION'] = '0.9'
 
 
 # os.environ['XLA_FLAGS'] = '--xla_gpu_enable_tracing'
@@ -16,7 +16,7 @@ import time
 
 
 
-from tcnqs.utils import build_ham_from_pyscf, wandb_init, wandb_log_energy#, _wandb_log_params
+from tcnqs.utils import build_ham_from_pyscf, wandb_init, wandb_log_energy
 import tcnqs.backflow as bf
 import tcnqs.trainer_vite as trainer
 from tcnqs.sampler.fssc import FSSC

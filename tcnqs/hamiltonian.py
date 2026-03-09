@@ -260,9 +260,9 @@ class Hamiltonian:
                                     self.n_elec_a * self.n_elec_b * (n_spa_orb - self.n_elec_a) * (n_spa_orb - self.n_elec_b) +
                                     n_spa_orb * (self.n_elec_a + self.n_elec_b) - self.n_elec_a ** 2 - self.n_elec_b ** 2)
             if not self.is_tc:
-                return (jnp.zeros(num_connections),), jnp.zeros((num_connections, self.n_orb), dtype=jnp.int8)
+                return (jnp.zeros(num_connections),), jnp.zeros((num_connections, self.n_orb), dtype=det.dtype)
             else:
-                return (jnp.zeros(num_connections),jnp.zeros(num_connections)), jnp.zeros((num_connections, self.n_orb), dtype=jnp.int8)
+                return (jnp.zeros(num_connections),jnp.zeros(num_connections)), jnp.zeros((num_connections, self.n_orb), dtype=det.dtype)
         else:
             return 0.0, (jnp.zeros((n_hci, self.n_orb), dtype=jnp.int8),jnp.zeros(n_hci))
 

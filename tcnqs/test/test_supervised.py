@@ -34,7 +34,7 @@ def test_backflow_supervised(mol, random_key):
     
     model, variables = bf.create_model(rng, input_size,
                                        num_electrons=num_alpha_electrons+num_beta_electrons,
-                                       hidden_layer_sizes=[4,4], activation='tanh')
+                                       hidden_layer_sizes=[4,4], activation='tanh', n_bf_dets=1)
     state = trainer.create_train_state(rng, model, variables)
     #print(variables)
     # Training loop

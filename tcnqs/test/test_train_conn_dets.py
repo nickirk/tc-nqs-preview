@@ -43,7 +43,7 @@ def test_backflow_connected(mol, random_key , num_epochs=2400, test=False):
 
     model_bf, variables_bf = bf.create_model(rng, input_shape = num_orbitals, 
                                             num_electrons= hamiltonian.n_elec
-                                ,hidden_layer_sizes=[], activation='tanh')
+                                ,hidden_layer_sizes=[], activation='tanh', n_bf_dets=1)
     state_bf = trainer.create_train_state(rng, model_bf, variables_bf)
     
     train_losses_bf = []
