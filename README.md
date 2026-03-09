@@ -2,6 +2,8 @@
 
 This project explores novel **neural network quantum states** (NQS) for quantum chemistry in **second quantization**. The primary focus is addressing the **dynamic correlation** (basis set convergence) problem in NQS using **transcorrelation (TC) theory**.
 
+This project was developed in support of the master thesis by Unik Anil Wadhwani titled "Transcorelated Neural Network Quantum States".
+
 ## Project Overview
 Standard NQS approaches can struggle with basis set convergence. TC-NQS implements transcorrelated Hamiltonians which, by construction, handle much of the short-range cusp condition and correlation, allowing simpler neural networks to describe the remaining wave function parts more efficiently. 
 
