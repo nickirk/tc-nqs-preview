@@ -27,7 +27,6 @@ The project requires Python >= 3.10 and the following core libraries:
 - `jax`, `jaxlib`
 - `pyscf`
 - `scipy`
-- `wandb`
 - `numpy`
 - `optax`
 - `flax`
