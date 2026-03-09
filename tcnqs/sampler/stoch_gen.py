@@ -60,7 +60,7 @@ def generate_connected_space(determinant: jnp.array,
         # n_spa_orb = len(determinant)//2
         num_connections = (1 + comb(n_elec_a,2, exact=True)*comb(n_spa_orb-n_elec_a,2,exact=True)+comb(n_elec_b,2, exact=True)*comb(n_spa_orb-n_elec_b,2,exact=True)
                     + n_elec_a*n_elec_b*(n_spa_orb-n_elec_a)*(n_spa_orb-n_elec_b) + n_spa_orb*(n_elec_a+n_elec_b)- n_elec_a**2 - n_elec_b**2)
-        return jnp.zeros((num_connections, 2*n_spa_orb),dtype =jnp.uint8)
+        return jnp.zeros((num_connections, 2*n_spa_orb),dtype =jnp.int8)
     return jax.lax.cond(jnp.sum(determinant)==n_elec_a+n_elec_b,_generate_connected_space ,_generate_padding)
     
     

@@ -4,11 +4,11 @@ from jax.tree_util import register_pytree_node_class
 
 from . import Sampler
 from tcnqs.hamiltonian import Hamiltonian
-from tcnqs.slater_det import SD
+# from tcnqs.slater_det import SD
 from functools import partial
-from scipy.special import comb
+# from scipy.special import comb
 from tcnqs.sampler.connected_dets import generate_connected_space
-import time
+
 
 @register_pytree_node_class
 class FSSC(Sampler):
@@ -29,91 +29,112 @@ class FSSC(Sampler):
         self.n_full = self.n_core + self.n_connected
 
         # self.hamiltonain = hamiltonain
-        self.core_space = jnp.zeros((self.n_core,self.n_spac_orb),dtype=jnp.uint8)
+        self.core_space = jnp.zeros((self.n_core,self.n_spac_orb),dtype=jnp.int8)
         # self.ham_stored = self.next_sample_stored(self.sample_core,hamiltonain)
     
 
    
-    #@jax.jit   
+    @jax.jit   
     def initialize(self): # -> tuple[jnp.ndarray, jnp.ndarray]:
-        alpha = jnp.concatenate((jnp.ones(self.n_elec_a),jnp.zeros(int(self.n_spac_orb/2)-self.n_elec_a)), dtype=jnp.uint8)
-        beta = jnp.concatenate((jnp.ones(self.n_elec_b),jnp.zeros(int(self.n_spac_orb/2)-self.n_elec_b)), dtype=jnp.uint8)
+        alpha = jnp.concatenate((jnp.ones(self.n_elec_a),jnp.zeros(int(self.n_spac_orb/2)-self.n_elec_a)), dtype=jnp.int8)
+        beta = jnp.concatenate((jnp.ones(self.n_elec_b),jnp.zeros(int(self.n_spac_orb/2)-self.n_elec_b)), dtype=jnp.int8)
         hartree_fock = jnp.concatenate((alpha,beta))
         cisd_space = generate_connected_space(hartree_fock, self.n_elec_a, self.n_elec_b)
         
-        
+        num_connections = len(cisd_space)
         ## ADDED: Add functionality to keep going untill maximum has reached
         ## USE: jax.lax.while
         
-        def generate_core_space(core_space):
+        def generate_core_space(init_value):
             # Assumption: Jax will return padding as the 0th element when taking jnp.unique 
             # padding == jnp.zeros(self.n_spac_orb)
-            connections =  self._vmap_generate_connected_space(core_space)
+            core_space = init_value[0]
+            iterator = init_value[1]
+            excite_space = jax.lax.dynamic_slice(core_space, (iterator,0), (self.n_core//num_connections,self.n_spac_orb) )
+            connections =  self._vmap_generate_connected_space(excite_space)
             connections = jnp.reshape(connections,(-1, self.n_spac_orb))
             #core_space = jnp.concatenate((core_space,connections))
+            connections = jnp.concatenate((core_space,connections),axis=0)
             core_space = jnp.unique(connections,axis = 0,size=self.n_core+1,fill_value=jnp.zeros(self.n_spac_orb))
             
             # 1st element is padding because of the lexicographic sort(jnp.unique)
-            return core_space[1:]
+            return core_space[1:], iterator+1
+        #jnp.expand_dims(hartree_fock,axis=0)
+        init_value = (jnp.unique(cisd_space,axis = 0,size=self.n_core,fill_value=jnp.zeros(self.n_spac_orb)), int(0))
+        core_space, iterator = jax.lax.while_loop(lambda core_space:jnp.all(core_space[0][-1]==jnp.zeros_like(core_space[0][-1])),generate_core_space,init_value)
         
-        init_value = jnp.unique(cisd_space,axis = 0,size=self.n_core,fill_value=jnp.zeros(self.n_spac_orb))
-        core_space = jax.lax.while_loop(lambda core_space:jnp.all(core_space[-1]==jnp.zeros_like(core_space[-1])),generate_core_space,init_value)
         # core_space = self._vmap_generate_connected_space(cisd_space[1:])
         # core_space = jnp.reshape(core_space,(-1, self.n_spac_orb))
         # core_space = jnp.unique(core_space,axis=0,size=self.n_core ,fill_value=jnp.zeros(self.n_spac_orb))
-        self.core_space = core_space
+        self.core_space = core_space[::-1]
         # return core_space
         return self
 
-     
-    @jax.jit 
-    def next_sample_stored(self, hamiltonian :Hamiltonian) -> jnp.ndarray:   #input: state instead of params,last_sample
-        # sorted_indices = jnp.argsort(jnp.abs(last_sample[1]),descending =True)
-        # core_space = last_sample[0][sorted_indices][:self.n_core]
-        
-        # connected_space = jnp.empty((self.n_connected,self.n_spac_orb))   
-        # connected_space = self._sample_connected(core_space)
-        # full_space = jnp.concatenate((core_space, connected_space)) 
-        # return (jnp.asarray(full_space,dtype=jnp.uint8), jnp.asarray(self.wfn_apply({'params': params},(full_space)),jnp.float64))
-        return self._full_space_(self.core_space),self.ham_stored(self.core_space, hamiltonian)
     
-    @jax.jit 
-    def next_sample_stored_batch(self,batch_core, hamiltonian :Hamiltonian) -> jnp.ndarray:   #input: state instead of params,last_sample
-        # sorted_indices = jnp.argsort(jnp.abs(last_sample[1]),descending =True)
-        # core_space = last_sample[0][sorted_indices][:self.n_core]
-        
-        # connected_space = jnp.empty((self.n_connected,self.n_spac_orb))   
-        # connected_space = self._sample_connected(core_space)
-        # full_space = jnp.concatenate((core_space, connected_space)) 
-        # return (jnp.asarray(full_space,dtype=jnp.uint8), jnp.asarray(self.wfn_apply({'params': params},(full_space)),jnp.float64))
-        return self._full_space_(batch_core),self.ham_stored(batch_core, hamiltonian)
+    # @jax.jit 
+    def next_sample_stored_batch(self, hamiltonian :Hamiltonian, batch_core) -> jnp.ndarray: 
+
+        ham_stored, connected_space = jax.vmap(hamiltonian.hamiltonian_and_connections, in_axes =(0))(batch_core)
+        return self._full_space_(connected_space,batch_core),ham_stored
     
-      
-    def _full_space_(self, sample_core: jnp.ndarray) -> jnp.ndarray:
-        # connected_space = jnp.empty((self.n_connected,self.n_spac_orb), dtype=jnp.uint8)
-        # connected = self._vmap_generate_connected_space(core)
-        # connected = jnp.reshape(connected,(-1, self.n_spac_orb))
-        
-        # connected = jnp.unique(connected, size = self.n_full ,axis=0,fill_value=jnp.zeros(self.n_spac_orb))
-        # connected = self._remove_core_elements(connected,core)
-        # connected_space = self._remove_excess_padding(connected,size=self.n_connected)
-        
-        connected_space = self._vmap_generate_connected_space(sample_core)
-        full_space = jnp.concatenate((sample_core,connected_space.reshape(-1,self.n_spac_orb)),axis=0)
 
-        unique_full, idx = jnp.unique(full_space,axis=0, size = self.n_full, return_inverse=True
-                                        ,fill_value=jnp.zeros(self.n_spac_orb))
-        return unique_full,idx
+    # @jax.jit 
+    def next_sample_stored(self, hamiltonian :Hamiltonian) -> jnp.ndarray:   #input: state instead of params,last_samples
+        ham_stored, connected_space = jax.vmap(hamiltonian.hamiltonian_and_connections, in_axes =(0))(self.core_space)
+        # def batched_ham_connections(carry, dets):
+        #     function = jax.vmap(hamiltonian.generate_hamiltonian_and_connections, in_axes =(0))
+        #     return carry, function(dets)
+        # init_dets = self.core_space.reshape(-1,self.n_batch,self.n_spac_orb)
+        # _ ,(ham_stored, connected_space) = jax.lax.scan(batched_ham_connections, None , init_dets)
+        # connected_space = connected_space.reshape(self.n_core,-1,self.n_spac_orb)
+        # ham_stored = ham_stored.reshape(self.n_core,-1)
 
+        return self._full_space_(connected_space, self.core_space),ham_stored #,self.ham_stored(self.core_space, hamiltonian)
+    
 
-    def ham_stored(self, sample_core, hamiltonain):
+    # ~TODO~: DEBUG :DONE 
+        # Can be a problem when padding is needed as 
+        # Solution: add the padding element manually and then remove it
+        # size = self.n_full +1
+        # [1:] clip the array based on lexicographic sort order
+        # [1:] [:-1] +1 -1 ,jnp.zeros((1,self.n_spac_orb),dtype =jnp.uint8)
+    @jax.jit
+    def _full_space_(self, connected_space: jnp.ndarray, batch_core: jnp.ndarray) -> jnp.ndarray:
+
+        # connected_space = self._vmap_generate_connected_space(sample_core)
+        # parts of old code
+        # full_space = jnp.concatenate((sample_core,connected_space.reshape(-1,self.n_spac_orb)),axis=0)
+
+        # unique_full, idx = jnp.unique(full_space,axis=0, size = self.n_full, return_inverse=True
+        #                                 ,fill_value=jnp.zeros(self.n_spac_orb))
+        # return unique_full,idx
+
+        # add padding to the end of the array to make sure jax.unique behaves correctly
+        full_space = jnp.concatenate((batch_core,connected_space.reshape(-1,self.n_spac_orb)
+                                       ,jnp.zeros((1,self.n_spac_orb),dtype =jnp.int8)),axis=0)
+        bin_full_space = self._binary_to_int64(full_space)
+        unique_full, idx ,inverse_idx = jnp.unique(bin_full_space,return_index=True, size = self.n_full+1, return_inverse=True
+                                        ,fill_value=jnp.zeros_like(bin_full_space[0]))
+        return full_space[idx][1:], inverse_idx[:-1]-1
+
+    @partial(jax.jit, static_argnames=['n_hci_samples'])
+    def _full_space_hci_(self, hci_sample_space, n_hci_samples):
+        full_space = jnp.concatenate((hci_sample_space,jnp.zeros((1,self.n_spac_orb),dtype =jnp.int8)),axis=0)
+        bin_full_space = self._binary_to_int64(hci_sample_space)
+        unique_full, idx  = jnp.unique(bin_full_space,return_index=True, size = self.n_core*n_hci_samples+1
+                                        ,fill_value=jnp.zeros_like(bin_full_space[0]))
+        return full_space[idx][1:], idx[1:]
+    
+
+    # @jax.jit
+    def _ham_stored(self, sample_core, hamiltonain):
         # sample_core = sample[0][sample[1][:sampler.n_core]].reshape(-1,sampler.n_spac_orb)
         connected_space = self._vmap_generate_connected_space(sample_core)
-        # connected_space = sample[0][sample[1][sampler.n_core:]].reshape(sampler.n_core,-1,sampler.n_spac_orb)
+
         @partial(jax.vmap,in_axes=(0,0))
         def psi_H_xi(slater_determinant,connections):
-            return jax.vmap(hamiltonain,in_axes=(None,0))(slater_determinant,connections)
-
+            return jax.jit(jax.vmap(hamiltonain,in_axes=(None,0)))(slater_determinant,connections)
+        
         return psi_H_xi(sample_core,connected_space)
 
     def update_core_space(self, new_sample_core):
@@ -123,25 +144,13 @@ class FSSC(Sampler):
     def _vmap_generate_connected_space(self, sd):
         # Apply vmap to the function, passing self attributes explicitly
         return jax.vmap(generate_connected_space, in_axes=(0, None, None))(sd, self.n_elec_a, self.n_elec_b)
-
-    # Deprecated
-    def _remove_excess_padding(self, sd_space, size=None):
-        padding = jnp.zeros(self.n_spac_orb)
-        relevant_indices = jnp.where(jnp.logical_not(jnp.all(sd_space==padding,axis=1)),size=size)[0]
-        sd_space = sd_space[relevant_indices]
-        return sd_space
     
-    # Deprecated
-    @partial(jax.vmap, in_axes=(None, 0, None))    
-    def _remove_core_elements(self,det,core_space):
-        condition_core=jnp.all(core_space==det,axis=1)
-        #condition_connected=jnp.all(connected_space==det,axis=1)
-        
-        condition = jnp.logical_not(jnp.any(condition_core))
 
-        return jax.lax.cond(condition, lambda : det, lambda : jnp.zeros(self.n_spac_orb, dtype=jnp.uint8))
-        #return jnp.any(condition)
-
+    @partial(jax.vmap, in_axes=(None, 0))
+    def _binary_to_int64(self, array):
+        powers_of_two = jnp.power(2, jnp.arange(array.shape[0], dtype=jnp.int64))
+        return jnp.dot(array, powers_of_two)
+    
     def tree_flatten(self):
         # Return the dynamic fields and static fields separately
         dynamic = (self.core_space,)  # Include any fields that should be transformed with jax (for example, mutable arrays)
@@ -150,7 +159,6 @@ class FSSC(Sampler):
 
     @classmethod
     def tree_unflatten(cls, static, dynamic):
-        # Reconstruct the class with static fields, dynamic can be ignored if empty
         instance = cls(*static[:-1])
         instance.n_full = static[-1]
         instance.core_space = dynamic[0]
@@ -158,8 +166,25 @@ class FSSC(Sampler):
         return instance
 
 
+    # # Deprecated
+    # def _remove_excess_padding(self, sd_space, size=None):
+    #     padding = jnp.zeros(self.n_spac_orb)
+    #     relevant_indices = jnp.where(jnp.logical_not(jnp.all(sd_space==padding,axis=1)),size=size)[0]
+    #     sd_space = sd_space[relevant_indices]
+    #     return sd_space
+    # Deprecated
+    # @partial(jax.vmap, in_axes=(None, 0, None))    
+    # def _remove_core_elements(self,det,core_space):
+    #     condition_core=jnp.all(core_space==det,axis=1)
+    #     #condition_connected=jnp.all(connected_space==det,axis=1)
+        
+    #     condition = jnp.logical_not(jnp.any(condition_core))
+
+    #     return jax.lax.cond(condition, lambda : det, lambda : jnp.zeros(self.n_spac_orb, dtype=jnp.int8))
+    #     #return jnp.any(condition)
+
 ## Deprecated Methods: Can be useful in the future
- # @partial(jax.vmap, in_axes=(0))
+    # @partial(jax.vmap, in_axes=(0))
         # def find_Ci(det):
         #     condition=jnp.all(last_slater_determinants==det,axis=1)
         #     return jax.lax.cond(jnp.any(condition), Ci_in_preds, 
@@ -209,4 +234,14 @@ class FSSC(Sampler):
     # full_space =full_space[relevant_indices]
 
     # return (full_space, self.wfn_apply({'params': params}, full_space))
-        
+    
+
+
+    # connected_space = jnp.empty((self.n_connected,self.n_spac_orb), dtype=jnp.uint8)
+    # connected = self._vmap_generate_connected_space(core)
+    # connected = jnp.reshape(connected,(-1, self.n_spac_orb))
+    
+    # connected = jnp.unique(connected, size = self.n_full ,axis=0,fill_value=jnp.zeros(self.n_spac_orb))
+    # connected = self._remove_core_elements(connected,core)
+    # connected_space = self._remove_excess_padding(connected,size=self.n_connected)
+    

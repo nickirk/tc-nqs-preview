@@ -30,7 +30,7 @@ def train_step(state, batch):
 
 #@jax.jit
 def train_step_log(state,batch):
-    
+    ##not normalised
     def log_loss(params,apply_fn,x,y):
         # this will calculate the batch loss directly for all x,y
         preds = apply_fn({'params': params}, x)
@@ -184,67 +184,78 @@ def energy(params,sample,ham_stored,state,sampler):
     Ci = Ci[idx]
     ci_core, ci_connected = Ci[:sampler.n_core], Ci[sampler.n_core:].reshape(sampler.n_core,-1)
     Norm = jnp.linalg.norm(ci_core)
-    e = jnp.dot(ci_core,jnp.einsum('ij,ij->i', ham_stored,ci_connected))/Norm**2
+    e = jnp.dot(ci_core,jnp.einsum('ij,ij->i', ham_stored[0],ci_connected))/Norm**2
     
     new_sample_core = unique_full[next_sample_idx]
-
+    # test_sample = jnp.all(jnp.sum(new_sample_core, axis=1) == sampler.n_elec_a+ sampler.n_elec_b)
+    # jax.debug.print("test sampling = {test_bool}", test_bool=test_sample)
+    # test_bool = jnp.all(jnp.unique(new_sample_core, axis=0, size=sampler.n_core) == jnp.unique(sampler.core_space, axis=0, size=sampler.n_core))
+    # jax.debug.print("test sampling = {test_bool}", test_bool=test_bool)
     #return e,new_sample_core
-    ## Try: numerator and denominator seprately 
     return e, new_sample_core
 #@partial(jax.jit)
 def new_state(state, sample ,ham_stored,sampler):
     #jax.grad = jax.grad(energy) only in first input
-    energy_sample ,grads = jax.value_and_grad(energy, argnums=0, has_aux = True)(state.params, sample, ham_stored, state, sampler)
+    (energy_val, new_sample) ,grads = jax.value_and_grad(energy, argnums=0, has_aux = True)(state.params, sample, ham_stored, state, sampler)
     new_state = state.apply_gradients(grads=grads)
-    sampler = sampler.update_core_space(energy_sample[1])
-    return new_state ,energy_sample[0],sampler ## energy , New sample 
+    grads, _ = jax.flatten_util.ravel_pytree(grads)
+    jax.debug.print("grad_norm = {grad_norm}", grad_norm =jnp.linalg.norm(grads) )
+    sampler = sampler.update_core_space(new_sample)
+    return new_state ,energy_val,sampler ## energy , New sample
 
 # @partial(jax.jit,static_argnums=(4))
 @jax.jit
-def train_step_fssc(state , hamiltonain, sampler, flag, stored_tuple):
-    sample_core = sampler.core_space
-    def sample_ham_stored():
-        return sampler.next_sample_stored(hamiltonain)
+def train_step_fssc(state , hamiltonian, sampler ): #, flag, stored_tuple
+    # sample_core = sampler.core_space
+    # def sample_ham_stored():
+    #     return sampler.next_sample_stored(hamiltonian)
 
-    sample , ham_stored = jax.lax.cond(flag,lambda :stored_tuple,sample_ham_stored)
- 
+    #sample , ham_stored = jax.lax.cond(flag,lambda :stored_tuple,sample_ham_stored)
+    sample ,ham_stored = sampler.next_sample_stored(hamiltonian)
     state , loss, sampler = new_state(state,sample,ham_stored,sampler)
     
-    flag = jnp.all(jnp.unique(sample_core,axis =0,size = sampler.n_core)==jnp.unique(sampler.core_space,axis = 0,size = sampler.n_core))
-    return state, loss, sampler, flag, (sample,ham_stored)
+    # flag = jnp.all(jnp.unique(sample_core,axis =0,size = sampler.n_core)==jnp.unique(sampler.core_space,axis = 0,size = sampler.n_core))
+    return state, loss, sampler#, flag, (sample,ham_stored)
 
-# OLD FUNCTION
-# def energy_batch(params,hamiltonian,state,sampler,batch_size):
-#     batches = sampler.core_space.reshape(-1,batch_size,sampler.n_spac_orb)
-#     def energy_batch(carry, batch):
-#         sample_new,numerator,denominator = carry 
+# can be made more efficient by using derivative of energy instead of jacobian
+@jax.jit
+def train_step_fssc_corespace(state, hamiltonian :Hamiltonian, sampler: FSSC):
+    sample,ham_stored = sampler.next_sample_stored(hamiltonian)
+    unique_full,idx = sample
+    Ci = state.apply_fn({'params': state.params},unique_full)
+    #Norm = jnp.linalg.norm(Ci)
+    next_sample_idx = jnp.argsort(jnp.abs(Ci),descending =True)[:sampler.n_core]
+    Ci = Ci[idx]
+    ci_core, ci_connected = Ci[:sampler.n_core], Ci[sampler.n_core:].reshape(sampler.n_core,-1)
+    
+    e_loc = jnp.einsum('ij,ij->i', ham_stored[0],ci_connected)
+    
 
-#         batch_full, ham_stored= sampler.next_sample_stored_batch(batch,hamiltonian)
- 
-#         unique_full,idx = batch_full
-#         ci = state.apply_fn({'params': params},unique_full)
-#         #next_sample_idx = jnp.argsort(jnp.abs(Ci),descending =True)[:sampler.n_core]
-        
-#         Ci = ci[idx]
-#         #reshape into batchsize multiples
-#         ci_core, ci_connected = Ci[:batch.shape[0]], Ci[batch.shape[0]:].reshape(batch.shape[0],-1)
-#         denominator += jnp.linalg.norm(ci_core)**2
-#         numerator += jnp.dot(ci_core,jnp.einsum('ij,ij->i', ham_stored,ci_connected))
-        
+    def energy(params,core_space,e_loc):
+        Ci = state.apply_fn({'params': params},core_space)
+        Norm = jnp.linalg.norm(Ci)
+        energy = jnp.dot(ci_core,e_loc)/Norm**2
+        return energy
+    e_val , grads= jax.value_and_grad(energy,argnums=0)(state.params,unique_full[idx][:sampler.n_core],e_loc)
+    
+   
+    # Using the funtion jacobian_formatted to calculate jacobian instead
 
-#         ## ERROR: The next_sample_idx is not unique for each batch
-#         next_sample_idx = jnp.argsort(jnp.concatenate([sample_new[1], ci]), descending=True)[:sampler.n_core]
-#         sample_new = (jnp.concatenate([sample_new[0], unique_full])[next_sample_idx], 
-#                   jnp.concatenate([sample_new[1], ci])[next_sample_idx])
-#         carry = (sample_new,numerator,denominator)
-#         ## 
-        
-#         return (carry, None)
-#     carry_init = ((jnp.zeros((sampler.n_core,sampler.n_spac_orb),dtype=jnp.uint8),jnp.zeros(sampler.n_core,dtype=jnp.float64)), 0.0 , 0.0)
-#     final_carry,_ = jax.lax.scan(energy_batch,carry_init, batches)
-#     energy = final_carry[1]/final_carry[2] #(final_carry[1],final_carry[2])
-#     sample_new = final_carry[0]
-#     return energy, sample_new
+    # Norm = jnp.linalg.norm(ci_core)
+    # e_val = jnp.dot(ci_core,e_loc)/Norm**2
+    # ## take grads only of core space inputs
+    # jacobian = jacobian_formatted(state,sampler.core_space)
+    # _, unravel_fn = jax.flatten_util.ravel_pytree(state.params)
+    # grads = 2*jnp.dot(jacobian.T,e_loc)/Norm**2 - 2*e_val*jnp.dot(jacobian.T,ci_core)/Norm**2
+    # grads = unravel_fn(grads)
+
+    state =state.apply_gradients(grads=grads)
+    sampler = sampler.update_core_space(unique_full[next_sample_idx])
+
+    return state, e_val, sampler
+
+
+
 
 
 def batched_energy(params, carry ,state, stored, batch, sampler):
@@ -313,7 +324,270 @@ def train_step_batched(state, hamiltonian: Hamiltonian, sampler : FSSC):
     sampler = sampler.update_core_space(sample_new[0])
     return new_state , value[0]/value[1] , sampler        ## energy , new_sample 
 
-
 def create_train_state(rng, model, variables):
-    tx = optax.adam(learning_rate = learning_rate)
+    tx = optax.adam(learning_rate = learning_rate[0])
     return train_state.TrainState.create(apply_fn=model.apply, params=variables['params'], tx=tx)
+
+@partial(jax.vmap, in_axes = (None,0))
+def jacobian_formatted(state,slater_det):
+    apply_fn = lambda  params,slater_det: state.apply_fn({'params': params},jnp.expand_dims(slater_det,axis=0))[0]
+    jacobian_1d = jax.grad(apply_fn,argnums=0)(state.params,slater_det)
+    jacobian_1d = jax.tree_map(lambda x: jnp.reshape(x,(1,-1)),jacobian_1d)
+    jacobian_1d = jax.tree.flatten(jacobian_1d)[0]
+    jacobian_1d = jnp.concatenate(jacobian_1d ,axis= 1)
+    return jacobian_1d[0]
+
+# OLD FUNCTION
+# def energy_batch(params,hamiltonian,state,sampler,batch_size):
+#     batches = sampler.core_space.reshape(-1,batch_size,sampler.n_spac_orb)
+#     def energy_batch(carry, batch):
+#         sample_new,numerator,denominator = carry 
+
+#         batch_full, ham_stored= sampler.next_sample_stored_batch(batch,hamiltonian)
+ 
+#         unique_full,idx = batch_full
+#         ci = state.apply_fn({'params': params},unique_full)
+#         #next_sample_idx = jnp.argsort(jnp.abs(Ci),descending =True)[:sampler.n_core]
+        
+#         Ci = ci[idx]
+#         #reshape into batchsize multiples
+#         ci_core, ci_connected = Ci[:batch.shape[0]], Ci[batch.shape[0]:].reshape(batch.shape[0],-1)
+#         denominator += jnp.linalg.norm(ci_core)**2
+#         numerator += jnp.dot(ci_core,jnp.einsum('ij,ij->i', ham_stored,ci_connected))
+        
+
+#         ## ERROR: The next_sample_idx is not unique for each batch
+#         next_sample_idx = jnp.argsort(jnp.concatenate([sample_new[1], ci]), descending=True)[:sampler.n_core]
+#         sample_new = (jnp.concatenate([sample_new[0], unique_full])[next_sample_idx], 
+#                   jnp.concatenate([sample_new[1], ci])[next_sample_idx])
+#         carry = (sample_new,numerator,denominator)
+#         ## 
+        
+#         return (carry, None)
+#     carry_init = ((jnp.zeros((sampler.n_core,sampler.n_spac_orb),dtype=jnp.uint8),jnp.zeros(sampler.n_core,dtype=jnp.float64)), 0.0 , 0.0)
+#     final_carry,_ = jax.lax.scan(energy_batch,carry_init, batches)
+#     energy = final_carry[1]/final_carry[2] #(final_carry[1],final_carry[2])
+#     sample_new = final_carry[0]
+#     return energy, sample_new
+
+# The funcationality is implemented in a different module 
+
+# ## Calculate Jacobian as a fucntion of input state
+# # Then use the input states vmap to calculate the whole jacobian  
+# @jax.jit
+# def train_step_VITE(state, hamiltonian: Hamiltonian, sampler : FSSC):
+#     """
+#     Perform a single training step for the Variational Imaginary Time Evolution (VITE) algorithm.
+#     Args:
+#         state: The current state of the model, including parameters and apply function.
+#         hamiltonian (Hamiltonian): The Hamiltonian of the system being simulated.
+#         sampler (FSSC): The sampler used to generate samples from the quantum state.
+#     Returns:
+#         tuple: A tuple containing the updated state, the energy and the updated sampler.
+#     """
+    
+#     # Jacobian_fn = lambda sd: jax.jacrev(state.apply_fn({'params': state.params}, jnp.expand_dims(sd,axis=0)),argnums=0)
+#     # Jacobian = jax.vmap(Jacobian_fn)(sampler.core_space)
+
+#     def apply_fn_params(params,core_space):
+#         ci_core = state.apply_fn({'params': params},core_space)
+#         norm = jnp.linalg.norm(ci_core)
+#         ci_core = ci_core/ norm
+#         return ci_core, norm
+    
+#     ## Calculate inverse A_ij
+#     # apply_fn_params = lambda params: state.apply_fn({'params': params}, sampler.core_space)
+    
+#     Jacobian, norm = jax.jacrev(apply_fn_params,argnums=0,has_aux=True)(state.params,sampler.core_space)
+#     # jax.debug.breakpoint()
+
+#     # Jacobian, _ = jax.flatten_util.ravel_pytree(Jacobian)
+#     # Jacobian = Jacobian.reshape((-1, sampler.n_core)) #(-1,sampler.n_core)
+#     Jacobian = jax.tree_map(lambda x: jnp.reshape(x,(sampler.n_core,-1)),Jacobian)
+#     Jacobian = jax.tree.flatten(Jacobian)[0]
+#     Jacobian = jnp.concatenate(Jacobian ,axis= 1)
+
+#     Aij_save =  Jacobian.T @ Jacobian  
+#     Aij= Aij_save + 1e-7*jnp.diag(jnp.ones(Jacobian.shape[1]))  #Jacobian.T @ Jacobian # 
+#     #inverse_Aij = jnp.linalg.inv(Aij, hermitian=True)
+    
+#     ## Calculate B_i
+#     # B_i = dC_j/dtheta_i * H_jk * C_k
+#     # j - core space , k - connecected space
+#     sample , H_ij = sampler.next_sample_stored(hamiltonian)
+#     unique_full , idx = sample
+#     Ci = state.apply_fn({'params': state.params},unique_full)/norm
+#     ci_core, ci_connected = Ci[idx][:sampler.n_core], Ci[idx][sampler.n_core:].reshape(sampler.n_core,-1)
+#     H_Psi = jnp.einsum('ij,ij->i', H_ij,ci_connected)
+#     B_i = jnp.dot(Jacobian.T, H_Psi)
+    
+#     ## Calculate energy and update core space
+#     next_sample_idx = jnp.argsort(jnp.abs(Ci),descending =True)[:sampler.n_core]
+    
+#     # Already normalized state
+#     energy = jnp.dot(ci_core,H_Psi)
+
+#     new_sample_core = unique_full[next_sample_idx]
+#     sampler = sampler.update_core_space(new_sample_core)
+
+#     ## Update parameters- calculate grads and update
+#     _, unravel_fn = jax.flatten_util.ravel_pytree(state.params)
+#     grads = jax.scipy.sparse.linalg.cg(Aij,B_i)[0] #jnp.dot(inverse_Aij,B_i)
+#     grads = unravel_fn(grads)
+#     state = state.apply_gradients(grads=grads)
+
+#     return state, energy, sampler#, Aij_save 
+
+
+    
+# @jax.jit
+# def train_step_VITE_efficient(state, hamiltonian: Hamiltonian, sampler : FSSC):
+#     """
+#     Perform a single training step for the Variational Imaginary Time Evolution (VITE) algorithm.
+#     Args:
+#         state: The current state of the model, including parameters and apply function.
+#         hamiltonian (Hamiltonian): The Hamiltonian of the system being simulated.
+#         sampler (FSSC): The sampler used to generate samples from the quantum state.
+#     Returns:
+#         tuple: A tuple containing the updated state, the energy and the updated sampler.
+#     """
+#     sample , H_ij = sampler.next_sample_stored(hamiltonian)
+#     unique_full , idx = sample
+#     Ci = state.apply_fn({'params': state.params},unique_full)  
+#     ci_core, ci_connected = Ci[idx][:sampler.n_core], Ci[idx][sampler.n_core:].reshape(sampler.n_core,-1)
+#     Norm = jnp.linalg.norm(ci_core)
+#     ci_core, ci_connected = ci_core/Norm, ci_connected/Norm
+#     next_sample_idx = jnp.argsort(jnp.abs(Ci),descending =True)[:sampler.n_core]
+#     H_Psi = jnp.einsum('ij,ij->i', H_ij,ci_connected)
+#     energy = jnp.dot(ci_core,H_Psi)
+#     new_sample_core = unique_full[next_sample_idx]
+    
+#     ## Calculate A_ij
+#     Jacobian = jacobian_formatted(state,sampler.core_space)
+#     # Preserve Norm  
+#     Jacobian = (Jacobian - jnp.outer(ci_core,jnp.dot(Jacobian.T,ci_core)))/Norm
+#     #Aij_save =  Jacobian.T @ Jacobian  - (dC_j/dtheta_i * C_j)(Cj*dC_j/dtheta_i)
+#     Aij= Jacobian.T @ Jacobian  #- jnp.dot(Jacobian.T,ci_core)*jnp.dot(ci_core,Jacobian)
+#     Aij= Aij+1e-7*(jnp.eye(Aij.shape[0]))
+
+#     ## Calculate B_i
+#     # B_i = dC_j/dtheta_i * H_jk * C_k - E* dC_j/dtheta_i * C_j
+#     # j - core space , k - connecected space
+#     B_i = jnp.dot(Jacobian.T, H_Psi)
+
+#     ## Update core space
+#     sampler = sampler.update_core_space(new_sample_core)
+
+#     ## Update parameters- calculate grads and update
+#     _, unravel_fn = jax.flatten_util.ravel_pytree(state.params)
+#     grads = jax.scipy.sparse.linalg.cg(Aij,B_i)[0] 
+#     grads = unravel_fn(grads)
+#     state = state.apply_gradients(grads=grads)
+
+#     return state, energy, sampler 
+
+# @jax.jit
+# def train_step_minSR(state, hamiltonian: Hamiltonian, sampler : FSSC):
+#     """
+#     Perform a single training step for the Variational Imaginary Time Evolution (VITE) algorithm.
+#     Args:
+#         state: The current state of the model, including parameters and apply function.
+#         hamiltonian (Hamiltonian): The Hamiltonian of the system being simulated.
+#         sampler (FSSC): The sampler used to generate samples from the quantum state.
+#     Returns:
+#         tuple: A tuple containing the updated state, the energy and the updated sampler.
+#     """
+#     sample , H_ij = sampler.next_sample_stored(hamiltonian)
+#     unique_full , idx = sample
+#     Ci = state.apply_fn({'params': state.params},unique_full)  
+#     ci_core, ci_connected = Ci[idx][:sampler.n_core], Ci[idx][sampler.n_core:].reshape(sampler.n_core,-1)
+#     Norm = jnp.linalg.norm(ci_core)
+#     ci_core, ci_connected = ci_core/Norm, ci_connected/Norm
+#     next_sample_idx = jnp.argsort(jnp.abs(Ci),descending =True)[:sampler.n_core]
+#     H_Psi = jnp.einsum('ij,ij->i', H_ij,ci_connected)
+#     energy = jnp.dot(ci_core,H_Psi)
+#     new_sample_core = unique_full[next_sample_idx]
+    
+#     ## Calculate A_ij
+#     Jacobian = jacobian_formatted(state,sampler.core_space)
+#     # Preserve Norm  
+#     Jacobian = (Jacobian - jnp.outer(ci_core,jnp.dot(Jacobian.T,ci_core)))/Norm
+#     # Aij_save =  Jacobian.T @ Jacobian  - (dC_j/dtheta_i * C_j)(Cj*dC_j/dtheta_i)
+#     # Aij= Jacobian.T @ Jacobian  #- jnp.dot(Jacobian.T,ci_core)*jnp.dot(ci_core,Jacobian)
+#     # Aij= Aij+1e-7*(jnp.eye(Aij.shape[0]))
+#     # Neural tangent kernal
+#     Tij = Jacobian @ Jacobian.T #+1e-7*(jnp.eye(Jacobian.shape[0]))
+
+#     ## Calculate B_i
+#     # B_i = dC_j/dtheta_i * H_jk * C_k - E* dC_j/dtheta_i * C_j
+#     # j - core space , k - connecected space
+#     B_i = H_Psi #Jacobian @ jnp.dot(Jacobian.T, H_Psi)
+
+#     ## Update core space
+#     sampler = sampler.update_core_space(new_sample_core)
+
+#     ## Update parameters- calculate grads and update
+#     _, unravel_fn = jax.flatten_util.ravel_pytree(state.params)
+#     grads = Jacobian.T @ jnp.linalg.pinv(Tij,rcond=5e-8, hermitian=True)@B_i#jax.scipy.sparse.linalg.cg(Tij,B_i)[0] 
+#     #jnp.linalg.pinv(Tij)@B_i#
+#     grads = unravel_fn(grads)
+#     state = state.apply_gradients(grads=grads)
+
+#     return state, energy, sampler 
+
+
+
+# @jax.jit
+# def train_step_projections(state, hamiltonian: Hamiltonian, sampler : FSSC, U : jnp.ndarray):
+#     """
+#     Perform a single training step for the Variational Imaginary Time Evolution (VITE) algorithm.
+#     Args:
+#         state: The current state of the model, including parameters and apply function.
+#         hamiltonian (Hamiltonian): The Hamiltonian of the system being simulated.
+#         sampler (FSSC): The sampler used to generate samples from the quantum state.
+#     Returns:
+#         tuple: A tuple containing the updated state, the energy and the updated sampler.
+#     """
+#     sample , H_ij = sampler.next_sample_stored(hamiltonian)
+#     unique_full , idx = sample
+#     Ci = state.apply_fn({'params': state.params},unique_full)  
+#     ci_core, ci_connected = Ci[idx][:sampler.n_core], Ci[idx][sampler.n_core:].reshape(sampler.n_core,-1)
+#     Norm = jnp.linalg.norm(ci_core)
+#     ci_core, ci_connected = ci_core/Norm, ci_connected/Norm
+#     next_sample_idx = jnp.argsort(jnp.abs(Ci),descending =True)[:sampler.n_core]
+#     H_Psi = jnp.einsum('ij,ij->i', H_ij,ci_connected)
+#     energy = jnp.dot(ci_core,H_Psi)
+#     new_sample_core = unique_full[next_sample_idx]
+    
+#     ## Calculate A_ij
+#     Jacobian = jacobian_formatted(state,sampler.core_space)
+#     # Preserve Norm  
+#     Jacobian = (Jacobian - jnp.outer(ci_core,jnp.dot(Jacobian.T,ci_core)))/Norm
+#     #Aij_save =  Jacobian.T @ Jacobian  - (dC_j/dtheta_i * C_j)(Cj*dC_j/dtheta_i)
+#     Aij_save= Jacobian.T @ Jacobian  #- jnp.dot(Jacobian.T,ci_core)*jnp.dot(ci_core,Jacobian)
+#     Aij= U.T @ Aij_save @ U
+#     Aij= Aij+1e-7*(jnp.eye(Aij.shape[0]))
+
+#     ## Calculate B_i
+#     # B_i = dC_j/dtheta_i * H_jk * C_k - E* dC_j/dtheta_i * C_j
+#     # j - core space , k - connecected space
+#     B_i = U.T @ jnp.dot(Jacobian.T, H_Psi)
+
+#     ## Update core space
+#     sampler = sampler.update_core_space(new_sample_core)
+
+#     ## Update parameters- calculate grads and update
+#     _, unravel_fn = jax.flatten_util.ravel_pytree(state.params)
+#     grads = jax.scipy.sparse.linalg.cg(Aij,B_i)[0] 
+#     grads = U @ grads
+#     grads = unravel_fn(grads)
+#     state = state.apply_gradients(grads=grads)
+
+
+#     return state, energy, sampler, Aij_save #+1e-7*(jnp.eye(Aij_save.shape[0]))
+
+# Without ADAM
+# def create_train_state_VITE(rng, model, variables):
+#     tx = optax.sgd(learning_rate=learning_rate)
+#     return train_state.TrainState.create(apply_fn=model.apply, params=variables['params'], tx=tx)
+

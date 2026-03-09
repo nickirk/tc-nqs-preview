@@ -1,12 +1,8 @@
 # Local notes
+notes/*.ipynb
+notes/*.txt
 /tcnqs/simulations/
-tc-nqs.ipynb
-data/
-fcidump*
-notes/*ipynb
-.DS_Store
-
->>>>>>> 09789bf (add some local ignore)
+.jax-metal
 *.pkl
 # Byte-compiled / optimized / DLL files
 __pycache__/
@@ -179,3 +175,4 @@ cython_debug/
 
 #temperory files
 /tmp/
+/wandb/
